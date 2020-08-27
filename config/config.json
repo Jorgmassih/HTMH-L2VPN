@@ -1,0 +1,108 @@
+{
+    "api": {
+        "url": "http://192.168.42.150:8181/onos/v1",
+        "headers": {
+            "Accept": "application/json"
+        },
+        "auth": ["onos", "rocks"],
+        "endpoints": {
+            "applications": {
+                "activate": ["POST", "{}/applications/{}/active"],
+                "deactivate": ["DELETE", "{}/applications/{}/active"]
+            },
+            "network_config": {
+                "subject_class": ["POST", "{}/network/configuration/{}"],
+                "config_key": ["POST", "{}/network/configuration/{}/{}/{}"]
+            },
+            "hosts_info": {
+                "get_host": ["GET", "{}/hosts/{}/{}"]
+            },
+            "path_info": {
+                "get_path": ["GET", "{}/paths/{}/{}"]
+            },
+            "delete_flows": {
+                "delete_application": ["Delete", "{}/flows/application/{}"]
+            }
+        }
+    },
+
+    "ports": {
+        "of:000032d89938154a/5" : {
+            "interfaces" : [
+                {   
+                    "name" : "Gateway",
+                    "ips"  : [ "12.0.0.1/30" ],
+                    "mac"  : "c2:01:3b:5f:00:00"
+                }
+            ]
+        },
+        "of:00008649569daf45/6" : {
+            "interfaces" : [
+                {   
+                    "name" : "Fixed Home 1",
+                    "ips"  : [ "181.36.240.1/30" ],
+                    "mac"  : "00:00:00:00:00:ff"
+                }
+            ]
+        },
+        "of:00001a729ecec545/6" : {
+            "interfaces" : [
+                {
+                    "name" : "Fixed Home 2",
+                    "ips"  : [ "181.36.240.5/30" ],
+                    "mac"  : "00:00:00:00:00:ff"
+                }
+            ]
+        }
+        
+    },
+    "bgp_speakers": {
+        "bgpSpeakers" : [
+            {
+                "name" : "Speaker with Gateway",
+                "connectPoint" : "of:000032d89938154a/4",
+                "peers" : ["12.0.0.2"]
+            }
+        ]
+    },
+    "reactive_routing": {
+        "ip4LocalPrefixes" : [
+            {
+                "ipPrefix" : "181.36.240.0/30",
+                "type" : "PRIVATE",
+                "gatewayIp" : "181.36.240.1"
+            },
+            {
+                "ipPrefix" : "181.36.240.4/30",
+                "type" : "PRIVATE",
+                "gatewayIp" : "181.36.240.5"
+            }
+        ],
+        "ip6LocalPrefixes" : [],
+        "virtualGatewayMacAddress" : "00:00:00:00:00:ff"
+    },
+    "virtual-lan-app" : {
+        "edge" : {
+            "priority": 40000,
+            "timeout": 0,
+            "isPermanent": true,
+            "deviceId": "",
+            "treatment": {
+                "instructions": [
+                {
+                    "type": "OUTPUT",
+                    "port": ""
+                }
+                ]
+            },
+            "selector": {
+                "criteria": [
+                {
+                    "type": "ETH_DST",
+                    "ethType": ""
+                }
+                ]
+            }
+        }
+    }
+}

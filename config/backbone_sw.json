@@ -1,0 +1,34 @@
+{
+  "endpoints": {
+    "paths": {
+      "get_shortest_path": "{}/paths/{}/{}"
+    },
+    "flows": {
+      "post_flow": "{}/flows?appId={}"
+    }
+  },
+  "flows": {
+    "fwd_path": {
+      "priority": 40000,
+      "timeout": 0,
+      "isPermanent": true,
+      "deviceId": "",
+      "treatment": {
+        "instructions": [
+          {
+            "type": "OUTPUT",
+            "port": ""
+          }
+        ]
+      },
+      "selector": {
+        "criteria": [
+          {
+            "type": "ETH_DST",
+            "mac": ""
+          }
+        ]
+      }
+    }
+  }
+}

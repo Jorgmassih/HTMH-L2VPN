@@ -1,0 +1,120 @@
+{
+  "home_settings": {
+    "normal_ip_range": "10.0.0.0/16",
+    "mapping_ip": "10.0.{}.{}",
+    "mapping_mask": "/32"
+  },
+  "endpoints": {
+    "hosts_info": {
+      "get_hosts": "{}/hosts",
+      "get_host": "{}/hosts/{}/{}"
+    },
+    "devices_info": {
+      "get_devices": "{}/devices",
+      "get_device": "{}/devices/{}",
+      "get_device_ports": "{}/devices/{}/ports"
+    },
+    "intents": {
+      "post_intent": "{}/intents"
+    },
+    "flows": {
+      "post_flow": "{}/flows?appId={}"
+    },
+    "network_config": {
+      "ports": "{}/network/configuration/ports"
+    }
+  },
+  "flows": {
+    "host2host_intent": {
+      "type": "HostToHostIntent",
+      "appId": "org.onosproject.ovsdb",
+      "priority": 40001,
+      "one": "",
+      "two": ""
+    },
+    "incoming_traffic": {
+      "priority": 40000,
+      "timeout": 0,
+      "isPermanent": true,
+      "deviceId": "",
+      "treatment": {
+        "instructions": [
+          {
+            "type": "L2MODIFICATION",
+            "subtype": "ETH_DST",
+            "mac": ""
+          },
+          {
+            "type":"L3MODIFICATION",
+            "subtype":"IPV4_DST",
+            "ip":""
+          },
+          {
+            "type": "OUTPUT",
+            "port": ""
+          }
+        ]
+      },
+      "selector": {
+        "criteria": [
+          {
+            "type": "ETH_TYPE",
+            "ethType": "0x800"
+          },
+          {
+            "type": "IPV4_DST",
+            "ip": ""
+          },
+          {
+            "type": "IN_PORT",
+            "port": "1"
+          }
+        ]
+      }
+    },
+    "outgoing_traffic": {
+      "priority": 40000,
+      "timeout": 0,
+      "isPermanent": true,
+      "deviceId": "",
+      "treatment": {
+        "instructions": [
+          {
+            "type": "L2MODIFICATION",
+            "subtype": "ETH_DST",
+            "mac": ""
+          },
+          {
+            "type":"L3MODIFICATION",
+            "subtype":"IPV4_SRC",
+            "ip":""
+          },
+          {
+            "type": "OUTPUT",
+            "port": "1"
+          }
+        ]
+      },
+      "selector": {
+        "criteria": [
+          {
+            "type": "ETH_TYPE",
+            "ethType": "0x800"
+          },
+          {
+            "type": "IPV4_DST",
+            "ip": ""
+          },
+          {
+            "type": "IPV4_SRC",
+            "ip": ""
+          },
+          {
+            "type": "ETH_DST",
+            "mac": ""
+          }
+        ]
+      }
+    }
+  }
+}
