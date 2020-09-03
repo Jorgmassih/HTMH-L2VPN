@@ -110,4 +110,3 @@ class NetworkAnatomy(MongoDriver):
             ids_to_compare.add(link_id)
 
         return self.links_ids - ids_to_compare, ids_to_compare - self.links_ids
-
