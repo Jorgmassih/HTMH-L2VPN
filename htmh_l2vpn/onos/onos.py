@@ -206,3 +206,10 @@ class ONOSDriver:
                                    auth=self.auth)
 
         return response
+
+    def get_links(self):
+        self.config.collection = 'Endpoints'
+        self.config.doc = 'links'
+        response = requests.get(self.config.get_all_links.format(self.url), headers=self.headers,
+                                auth=self.auth).json()['links']
+        return response

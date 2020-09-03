@@ -56,32 +56,58 @@ class NetworkAnatomy(MongoDriver):
 
     @property
     def access_devices(self):
-        return []
+        collection = self.db['AnatomyAccessDevices']
+        devices = list(collection.find())
+        return devices
 
     @property
     def core_devices(self):
-        return []
+        collection = self.db['AnatomyCoreDevices']
+        devices = list(collection.find())
+        return devices
+
 
     @property
     def links(self):
-        return []
+        collection = self.db['AnatomyLinks']
+        links_ = list(collection.find())
+        return links_
 
     @links.setter
-    def links(self, new_links: dict):
-        pass
+    def links(self, new_links: list):
+        collection = self.db['AnatomyLinks']
+        collection.delete_many({})
+        for link in new_links:
+
+            link_id = '{}-{}-{}-{}'.format(link['src']['device'], link['src']['port'],
+                                           link['dst']['device'], link['dst']['port'])
+            link['_id'] = link_id
+        collection.insert_many(new_links)
+
+    @property
+    def links_ids(self):
+        ids = set()
+        for link in self.links:
+            ids.add(link['_id'])
+
+        return ids
 
     def insert_host(self, host: dict):
         pass
 
     def insert_link(self, link: dict):
-        pass
+        collection = self.db['AnatomyLinks']
+        link_id = '{}-{}-{}-{}'.format(link['src']['device'], link['src']['port'],
+                                       link['dst']['device'], link['dst']['port'])
+        link['_id'] = link_id
+        collection.insert_one(link)
 
-    def compare_links(self, link: dict):
-        pass
+    def compare_links(self, links_to_compare: list):
+        ids_to_compare = set()
+        for link in links_to_compare:
+            link_id = '{}-{}-{}-{}'.format(link['src']['device'], link['src']['port'],
+                                           link['dst']['device'], link['dst']['port'])
+            ids_to_compare.add(link_id)
 
+        return self.links_ids - ids_to_compare, ids_to_compare - self.links_ids
 
-if __name__ == '__main__':
-    mongo = GetConfig('NetworkStatus')
-    mongo.collection = 'Endpoints'
-    mongo.doc = 'hosts_info'
-    print(mongo.get_hosts)
