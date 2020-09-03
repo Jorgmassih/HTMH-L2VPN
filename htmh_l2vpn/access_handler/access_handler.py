@@ -2,8 +2,8 @@ from htmh_l2vpn.access_switch.access_switch import AccessSw
 
 from htmh_l2vpn.onos.onos import ONOSDriver
 
-from itertools import combinations, cycle
-
+from itertools import combinations
+from htmh_l2vpn.watchdog.watchdog import Watchdog
 
 class AccessHandler:
 
@@ -16,6 +16,10 @@ class AccessHandler:
 
         self.access_sw = dict([(sw_id, AccessSw(id=sw_id, public_mac=self.onos_driver.get_sw_public_mac(sw_id)))
                           for sw_id in self.switches_id])
+
+        self.watchdog = Watchdog()
+        self.watchdog.watch_links = True
+        self.watchdog.run()
 
     def set_normal_functions(self):
         for host in self.onos_driver.get_hosts():
