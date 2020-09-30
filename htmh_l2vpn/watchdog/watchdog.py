@@ -2,7 +2,8 @@ from htmh_l2vpn.mongodb.mongo_driver import NetworkAnatomy
 from htmh_l2vpn.onos.onos import ONOSDriver
 from threading import Thread
 import time
-import warnings
+import logging
+
 
 class Watchdog:
     def __init__(self):
@@ -10,6 +11,7 @@ class Watchdog:
         self.onos_driver = ONOSDriver()
         self._watch_links = False
         self._watch_hosts = False
+        self.Whatna.links = self.onos_driver.get_links()
 
     @property
     def watch_links(self):
@@ -32,14 +34,23 @@ class Watchdog:
             links = self.onos_driver.get_links()
             down_links, restored_links = self.na.compare_links(links)
             if down_links:
-                warnings.warn('{} links are down'.format(str(down_links)))
+                self.na.links = links
+                logging.warning('{} links are down'.format(str(down_links)))
 
             if restored_links:
-                warnings.warn('{} links was restored'.format(str(restored_links)))
+                self.na.links = links
+                logging.warning('{} links was restored'.format(str(restored_links)))
+
+    def __watchdog_hosts(self):
+        while True:
+            print('Watchdog is watching for hosts')
 
     def run(self):
         print("Watchdog has started")
         watchdog_links = Thread(name='Watchdog links', target=self.__watchdog_links)
+        watchdog_hosts = Thread(name='Watchdog hosts', target=self.__watchdog_hosts())
         if self.watch_links:
             watchdog_links.start()
 
+        if self.watch_hosts:
+            watchdog_hosts.start()

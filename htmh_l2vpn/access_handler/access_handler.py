@@ -27,15 +27,8 @@ class AccessHandler:
             mac = host['mac']
             ip = host['ipAddresses'][0]
             port = host['locations'][0]['port']
-            #host_to_update = self.access_sw[host_location]
-            #host_to_update.add_host(mac=mac, ip=ip, port=port)
-            #self.access_sw.update({host_location: host_to_update})
 
             self.access_sw[host_location].add_host(mac=mac, ip=ip, port=port)
-
-            #self.access_sw[host_location] = self.access_sw.get(host_location).add_host(mac=mac, ip=ip, port=port)
-            # Probar con simulacion
-
 
         # Install internal fwd flows and arp
         for sw in list(self.access_sw.values()):
