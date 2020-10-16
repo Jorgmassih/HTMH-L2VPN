@@ -15,10 +15,18 @@ class AccessSw:
             warnings.warn(message="Invalid MAC Address: {}. Many functions couldn't work for this host.".format(public_mac),
                           category=ImportWarning)
 
+
+        self._is_host = False
         self.device_id = id.lower()
         self.public_mac = public_mac.lower()
         self.hosts = {}
         self.foreign_hosts = {}
+
+    @property
+    def is_host(self):
+        return self._is_host
+
+
 
     def __repr__(self):
         return self.device_id
