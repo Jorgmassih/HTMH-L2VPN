@@ -1,20 +1,56 @@
+from functools import wraps
+
 from flask import Flask, request, Response
-import secrets
+
+from htmh_l2vpn.mongodb.mongo_driver import User
 from htmh_l2vpn.web_services_stuff.jwt import WebToken
 import json
 
 app = Flask(__name__)
 
-secret_key = secrets.token_hex(25)
+secret_key = "secret"
 jwt = WebToken(secret_key=secret_key)
 
+allowed_cross_domains = ['http://127.0.0.1:3000']
+
+
+def auth_required(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        access_token = request.cookies.get('_access_token_')
+        if not access_token:
+            return Response(json.dumps({'message': 'No access token'}), 401)
+
+        else:
+            validation = jwt.validate_token(access_token)
+            if validation is None:
+                return Response(json.dumps({'message': 'An error has occurred with the server at middleware'}), 500)
+
+            return f(*args, **kwargs) if validation else Response(json.dumps({'message': 'No authorization'}), 401)
+
+    return wrap
+
+
+@app.after_request
+def apply_caching(response):
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Headers"] = "content-type"
+    response.headers['Access-Control-Allow-Methods'] = "GET,PUT,POST,DELETE"
+
+    request_domain = request.headers.get('Origin')
+    if request_domain in allowed_cross_domains:
+        response.headers["Access-Control-Allow-Origin"] = request_domain
+
+    print(request_domain)
+
+    return response
 
 @app.route('/api/v1/auth/login', methods=['POST'])
 def login():
     data = request.get_json()
     print(data)
     username, password = data['username'], data['password']
-    db_validation = True
+    db_validation = User(user_id=username).login(password=password)
 
     if db_validation:
         token = jwt.create_token(username)
@@ -29,6 +65,15 @@ def login():
         return resp
 
     return Response(json.dumps({'message': 'User not found'}), 401)
+
+
+@app.route('/api/v1/auth/is-auth', methods=['GET'])
+@auth_required
+def is_auth():
+    token = request.cookies.get('_access_token_')
+    username = jwt.decode_token(token)['sub']
+
+    return Response(json.dumps({'message': 'Authorized'}), status=200)
 
 
 if __name__ == '__main__':
