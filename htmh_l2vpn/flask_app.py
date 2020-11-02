@@ -3,7 +3,7 @@ from functools import wraps
 from flask import Flask, request, Response
 
 from htmh_l2vpn.mongodb.mongo_driver import User
-from htmh_l2vpn.web_services_stuff.jwt import WebToken
+from htmh_l2vpn.web_services_stuff.jwt_handler import WebToken
 import json
 
 app = Flask(__name__)
@@ -45,6 +45,7 @@ def apply_caching(response):
 
     return response
 
+
 @app.route('/api/v1/auth/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -67,13 +68,28 @@ def login():
     return Response(json.dumps({'message': 'User not found'}), 401)
 
 
+@app.route('/api/v1/auth/logout', methods=['GET'])
+def logout():
+    token = request.cookies.get('_access_token_')
+    print(type(token))
+    print(token)
+    username = jwt.decode_token(token)['sub']
+    User(user_id=username).logout()
+    resp = Response(json.dumps({'message': 'removing cookie token'}), 200)
+    resp.set_cookie(key="_access_token_", expires=0)
+    return resp
+
+
 @app.route('/api/v1/auth/is-auth', methods=['GET'])
 @auth_required
 def is_auth():
     token = request.cookies.get('_access_token_')
-    username = jwt.decode_token(token)['sub']
+    validation = jwt.validate_token(token)
+    if validation:
+        return Response(json.dumps({'message': 'Authorized'}), status=200)
 
-    return Response(json.dumps({'message': 'Authorized'}), status=200)
+    else:
+        return Response(json.dumps({'message': 'Unauthorized'}), status=403)
 
 
 if __name__ == '__main__':

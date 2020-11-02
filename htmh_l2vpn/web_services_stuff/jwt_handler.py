@@ -58,4 +58,3 @@ class WebToken:
         except jwt.exceptions.InvalidTokenError as e:
             print(e)
             return None
-
