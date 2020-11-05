@@ -48,7 +48,7 @@ class GetConfig(MongoDriver):
 
 
 class NetworkAnatomy(MongoDriver):
-    def __init__(self, db_name: str):
+    def __init__(self, db_name: str = 'NetworkStatus'):
         MongoDriver.__init__(self, db_name)
 
     @property
@@ -59,10 +59,13 @@ class NetworkAnatomy(MongoDriver):
 
     @staticmethod
     def convert_host_format(host: dict):
-        device_id, port, friendly_name = ObjectId('0'*8 + host['locations'][0]['elementId'][3:]), host['locations'][0]['port'], host['mac']
-        host['deviceId'], host['port'], host['friendlyName'] = device_id, port, friendly_name
+        device_id, port, friendly_name, ip = ObjectId('0'*8 + host['locations'][0]['elementId'][3:]),\
+                                             host['locations'][0]['port'], host['mac'], host['ipAddresses'][0]
+        host['deviceId'], host['port'], host['friendlyName'], host['ip'], host['virtualIp'] = \
+            device_id, port, friendly_name, ip, ''
         host.pop('id')
         host.pop('locations')
+        host.pop('ipAddresses')
 
         return host
 
@@ -153,6 +156,24 @@ class NetworkAnatomy(MongoDriver):
         return self.links_ids - ids_to_compare, ids_to_compare - self.links_ids
 
 
+class UserNetworkAnatomy(MongoDriver):
+    def __init__(self, device_id: ObjectId):
+        MongoDriver.__init__(self, db_name='NetworkStatus')
+        self.device_id = device_id
+
+    def get_devices_list(self):
+        collection = self.db['AnatomyHosts']
+        query = {'deviceId': self.device_id}
+        hosts = []
+        keys_to_filter = ['mac', 'ip', 'virtualIp', 'friendlyName', ]
+        for host in collection.find(query):
+            filtered = dict((k, host[k]) for k in keys_to_filter if k in host)
+            hosts.append(filtered)
+
+        return hosts
+
+
+
 class User(MongoDriver):
     def __init__(self, user_id: str):
         MongoDriver.__init__(self, db_name='UserInfo')
@@ -184,5 +205,11 @@ class User(MongoDriver):
             return False
 
         return True
+
+    def get_hosts(self):
+        query = {"documentId": self._user}
+        device = self.collection.find_one(filter=query)['equipmentId']
+        devices_list = UserNetworkAnatomy(device).get_devices_list()
+        return devices_list
 
 

@@ -92,5 +92,15 @@ def is_auth():
         return Response(json.dumps({'message': 'Unauthorized'}), status=403)
 
 
+@app.route('/api/v1/device/list', methods=['GET'])
+@auth_required
+def device_list():
+    token = request.cookies.get('_access_token_')
+    user = jwt.decode_token(token)['sub']
+    d_list = User(user_id=user).get_hosts()
+
+    return Response(json.dumps({'data': d_list}), status=200)
+
+
 if __name__ == '__main__':
     app.run(debug=True)
