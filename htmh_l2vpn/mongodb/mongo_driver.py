@@ -49,11 +49,45 @@ class GetConfig(MongoDriver):
 
 class NetworkAnatomy(MongoDriver):
     def __init__(self, db_name: str):
-        super().__init__(db_name)
+        MongoDriver.__init__(self, db_name)
 
     @property
     def hosts(self):
-        return {}
+        collection = self.db['AnatomyHosts']
+        hosts_ = list(collection.find())
+        return hosts_
+
+    @staticmethod
+    def convert_host_format(host: dict):
+        device_id, port, friendly_name = ObjectId('0'*8 + host['locations'][0]['elementId'][3:]), host['locations'][0]['port'], host['mac']
+        host['deviceId'], host['port'], host['friendlyName'] = device_id, port, friendly_name
+        host.pop('id')
+        host.pop('locations')
+
+        return host
+
+    def _get_host_id(self, host: dict):
+        if not host.get('deviceId'):
+            host = self.convert_host_format(host)
+
+        mac = host['mac']
+        device_id = str(host['deviceId'])[8:]
+        return '{}-{}'.format(mac, device_id)
+
+    @hosts.setter
+    def hosts(self, hosts: list):
+        collection = self.db['AnatomyHosts']
+        collection.delete_many({})
+        for i in range(len(hosts)):
+            if not hosts[i].get('deviceId'):
+                hosts[i] = self.convert_host_format(host=hosts[i])
+
+        collection.insert_many(hosts)
+
+    @property
+    def hosts_ids(self):
+        ids = set(map(self._get_host_id, self.hosts))
+        return ids
 
     @property
     def access_devices(self):
@@ -66,7 +100,6 @@ class NetworkAnatomy(MongoDriver):
         collection = self.db['AnatomyCoreDevices']
         devices = list(collection.find())
         return devices
-
 
     @property
     def links(self):
@@ -102,6 +135,13 @@ class NetworkAnatomy(MongoDriver):
                                        link['dst']['device'], link['dst']['port'])
         link['_id'] = link_id
         collection.insert_one(link)
+
+    def compare_host(self, hosts_to_compare: list):
+        pass
+
+    def new_host(self, hosts: list):
+        ids_to_compare = set(map(self._get_host_id, hosts))
+        return ids_to_compare - self.hosts_ids
 
     def compare_links(self, links_to_compare: list):
         ids_to_compare = set()
@@ -146,7 +186,3 @@ class User(MongoDriver):
         return True
 
 
-if __name__ == '__main__':
-    user = User('00512345678')
-
-    print(user.logout())

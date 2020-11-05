@@ -2,8 +2,8 @@ import re
 import string
 import ipaddress
 
-class CheckFor:
 
+class CheckFor:
     @staticmethod
     def mac(mac_value: str):
         validation = re.match("[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", mac_value.lower())
@@ -30,7 +30,6 @@ class CheckFor:
 
 
 class IpHandler:
-
     @staticmethod
     def increment_third_octet(ip: str, number_of_times: int = 1):
         result_ip = str(ipaddress.ip_address(ip) + 256 * number_of_times)

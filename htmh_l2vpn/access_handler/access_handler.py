@@ -92,6 +92,5 @@ class AccessHandler:
                                                   hosts=self.access_sw[device].hosts,
                                                   ports=self.access_sw[device].active_ports)
 
-
     def remote_default_gw(self, devices, service_token):
         pass

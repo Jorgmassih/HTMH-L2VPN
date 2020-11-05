@@ -11,7 +11,8 @@ class Watchdog:
         self.onos_driver = ONOSDriver()
         self._watch_links = False
         self._watch_hosts = False
-        self.Whatna.links = self.onos_driver.get_links()
+        self.na.links = self.onos_driver.get_links()
+        self.na.hosts = self.onos_driver.get_hosts()
 
     @property
     def watch_links(self):
@@ -43,7 +44,11 @@ class Watchdog:
 
     def __watchdog_hosts(self):
         while True:
-            print('Watchdog is watching for hosts')
+            hosts = self.onos_driver.get_hosts()
+            new_hosts = self.na.new_host(hosts)
+            if new_hosts:
+                print('New hosts are: ', new_hosts)
+                self.na.hosts = hosts
 
     def run(self):
         print("Watchdog has started")
@@ -54,3 +59,11 @@ class Watchdog:
 
         if self.watch_hosts:
             watchdog_hosts.start()
+
+
+if __name__ == '__main__':
+    w = Watchdog()
+    w.watch_hosts = True
+    w.run()
+
+
