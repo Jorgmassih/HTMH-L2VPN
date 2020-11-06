@@ -157,9 +157,9 @@ class NetworkAnatomy(MongoDriver):
 
 
 class UserNetworkAnatomy(MongoDriver):
-    def __init__(self, device_id: ObjectId):
+    def __init__(self, user_id: str):
         MongoDriver.__init__(self, db_name='NetworkStatus')
-        self.device_id = device_id
+        self.device_id = User(user_id=user_id).equipment_id
 
     def get_devices_list(self):
         collection = self.db['AnatomyHosts']
@@ -172,6 +172,13 @@ class UserNetworkAnatomy(MongoDriver):
 
         return hosts
 
+    def change_friendly_name(self, mac: str, new_friendly_name: str):
+        collection = self.db['AnatomyHosts']
+        query = {'mac': mac, 'deviceId': self.device_id}
+        update = collection.find_one_and_update(filter=query, update={'$set': {'friendlyName': new_friendly_name}},
+                                                upsert=False, return_document=True)
+
+        return True if update else False
 
 
 class User(MongoDriver):
@@ -203,13 +210,12 @@ class User(MongoDriver):
         if not update:
             print('Entry not found at login')
             return False
-
         return True
 
-    def get_hosts(self):
+    @property
+    def equipment_id(self):
         query = {"documentId": self._user}
         device = self.collection.find_one(filter=query)['equipmentId']
-        devices_list = UserNetworkAnatomy(device).get_devices_list()
-        return devices_list
+        return device
 
 
