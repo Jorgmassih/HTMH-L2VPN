@@ -129,13 +129,14 @@ def compute(variable):
     return Response(status=500)
 
 
-@app.route('/api/v1/services/htmh/create/', methods = ['POST'])
+@app.route('/api/v1/services/htmh/create', methods=['POST'])
 @auth_required
 def create_a_service():
     token = request.cookies.get('_access_token_')
     username = jwt.decode_token(token)['sub']
     services = Services(username)
-    content = request.get_json()
+    content = request.get_json()['serviceData']
+    print(content)
     content['usersId'] = [username]
     result = services.create_one(content)
     if (result['serviceToken'] is None):
@@ -143,7 +144,7 @@ def create_a_service():
     return Response(json.dumps(result), status=201)
 
 
-@app.route('/api/v1/services/htmh/add-user/', methods = ['PUT'])
+@app.route('/api/v1/services/htmh/subscribe', methods=['PUT'])
 @auth_required
 def add_user_to_service():
     token = request.cookies.get('_access_token_')

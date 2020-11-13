@@ -223,17 +223,17 @@ class Services(MongoDriver):
     def __init__(self, user_id):
         self.user_id = user_id
         MongoDriver.__init__(self, db_name='Services')
-    
+
     @property
     def user_col(self):
         self.db_name = 'Userinfo'
         return self.db['User']
-    
+
     @property
     def serv_col(self):
         self.db_name = 'Services'
-        return self.db['Services_test']
-    
+        return self.db['Htmh']
+
     @property
     def service_token(self):
         user_col = self.user_col
@@ -241,28 +241,32 @@ class Services(MongoDriver):
         user = user_col.find_one({'documentId': self.user_id})
         token = user['actualService']
         return token
-    
-    def create_one(self,content):
+
+    def create_one(self, content):
         userCol = self.user_col
         response = {'serviceToken': None, 'message': None}
         content['equipments'] = []
         content['firstNames'] = []
         content['isRunning'] = False
         content['isUsable'] = True
-        content['startDate'] = datetime.datetime.strptime(content['startDate'], "%Y-%m-%dT%H:%M:%S.%fz")
-        content['endDate'] = datetime.datetime.strptime(content['endDate'], "%Y-%m-%dT%H:%M:%S.%fz")
-        if (content['startDate'] > content['endDate']):
+        content['startDatetime'] = datetime.datetime.strptime(content['startDatetime'] + ':0.00z', "%Y-%m-%dT%H:%M:%S.%fz")
+        content['endDatetime'] = datetime.datetime.strptime(content['endDatetime'] + ':0.00z', "%Y-%m-%dT%H:%M:%S.%fz")
+
+        if content['startDatetime'] > content['endDatetime']:
             response['message'] = 'Invalid dates'
             return response
-        if (content['startDate'] < datetime.datetime.now()):
+
+        if content['startDatetime'] < datetime.datetime.now():
             response['message'] = 'Services cannot exist in the past'
             return response
-        if ( (content['endDate'] - content['startDate']).total_seconds()/60 < 30 ):
+
+        if (content['endDatetime'] - content['startDatetime']).total_seconds()/60 < 30:
             response['message'] = 'Service minimum time is 30 minutes'
             return response
+
         content['token'] = ObjectId(generate())
         for ide in content["usersId"]:
-            obj = [ObjectId('0'*( 24 - len(ide) ) + ide)]
+            obj = [ObjectId('0'*(24 - len(ide)) + ide)]
             user = userCol.find_one({'documentId': obj[0]})
             if (user['actualService'] is None):
                 userCol.update_one({'documentId': obj[0]}, {'$set': {'actualService': content['token']} } )
@@ -284,7 +288,7 @@ class Services(MongoDriver):
         userCol = self.user_col
         #content = request.get_json()
         ide = content['userId']
-        idObj = ObjectId('0'*( 24 - len(ide) ) + ide ) 
+        idObj = ObjectId('0'*( 24 - len(ide) ) + ide )
         #services = Mongo.Services
         collec = self.serv_col
         service = collec.find_one({'token': ObjectId(self.service_token)})
@@ -310,7 +314,7 @@ class Services(MongoDriver):
         service['firstNames'].append(user['firstName'])
         newvalues = { "$set": { "usersId": service['usersId'], "equipments": service['equipments'], "firstNames": service['firstNames'] } }
         #Equipments": service['Users_id'] },\
-        #"$set": { "firstNames": service['firstNames'] } }  
+        #"$set": { "firstNames": service['firstNames'] } }
         collec.update_one(serviceQuery, newvalues)
         #newUserID = { "$set": { "usersId": service['usersId'] } }
         #newUserID = { "$set": { "Users_id": ["1","2","3"] } }
@@ -321,7 +325,7 @@ class Services(MongoDriver):
         #collec.update_one(serviceQuery,newUserFi)
         response['message'] = 'success'
         return response
-    
+
     def kill_one(self):
         #user_db = Mongo.UserInfo
         userCol = self.user_col
@@ -343,14 +347,14 @@ class Services(MongoDriver):
             servCol.update_one({'token': ObjectId(self.service_token)}, {'$set': {'usersId': service['usersId']} })
             response['message'] = 'success'
             return response
-        
+
         for userId in service['usersId']:
             #print(userCol.find_one({'documentId': userId}))
             userCol.update_one({'documentId': userId}, {'$set': {'actualService': None} } )
         servCol.update_one({'token': ObjectId(self.service_token)}, {'$set': {'isUsable': False} })
         response['message'] = 'success'
         return response
-    
+
     def show_one(self):
         #content = request.get_json()
         #user_db = Mongo.UserInfo
@@ -381,7 +385,7 @@ class Services(MongoDriver):
             #if ( type(service[key]) == type(idObj) ):
                 #service[key] = str(service[key])
             #elif ( type(service[key]) == list ):
-                #list(map(str,service[key])) # change all items in the list to string 
+                #list(map(str,service[key])) # change all items in the list to string
         #print (service)
         response['message'] = 'success'
         response['content'] = service
