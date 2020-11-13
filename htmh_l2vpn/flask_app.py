@@ -2,7 +2,7 @@ from functools import wraps
 
 from flask import Flask, request, Response
 
-from htmh_l2vpn.mongodb.mongo_driver import User, UserNetworkAnatomy
+from htmh_l2vpn.mongodb.mongo_driver import User, UserNetworkAnatomy, Services
 from htmh_l2vpn.utils.utils import get_fee
 from htmh_l2vpn.web_services_stuff.jwt_handler import WebToken
 import json
@@ -127,6 +127,20 @@ def compute(variable):
         return Response(json.dumps({'fee': '$ ' + str(fee)}), status=200)
 
     return Response(status=500)
+
+
+@app.route('/api/v1/services/htmh/create/', methods = ['POST'])
+@auth_required
+def create_a_service():
+    token = request.cookies.get('_access_token_')
+    username = jwt.decode_token(token)['sub']
+    services = Services(username)
+    content = request.get_json()
+    content['usersId'] = [username]
+    result = services.create_one(content)
+    if (result['serviceToken'] is None):
+        return Response(json.dumps(result), status=401)
+    return Response(json.dumps(result), status=201)
 
 
 if __name__ == '__main__':
