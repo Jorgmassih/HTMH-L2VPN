@@ -219,6 +219,7 @@ class User(MongoDriver):
         device = self.collection.find_one(filter=query)['equipmentId']
         return device
 
+
 class Services(MongoDriver):
     def __init__(self, user_id):
         self.user_id = user_id
@@ -237,13 +238,13 @@ class Services(MongoDriver):
     @property
     def service_token(self):
         user_col = self.user_col
-        #serv_col = self.serv_col
+        # serv_col = self.serv_col
         user = user_col.find_one({'documentId': self.user_id})
         token = user['actualService']
         return token
 
     def create_one(self, content):
-        userCol = self.user_col
+        user_col = self.user_col
         response = {'serviceToken': None, 'message': None}
         content['equipments'] = []
         content['firstNames'] = []
@@ -265,11 +266,14 @@ class Services(MongoDriver):
             return response
 
         content['token'] = ObjectId(generate())
+        # Bug here
+        # usersId is not created yet at content dict
         for ide in content["usersId"]:
             obj = [ObjectId('0'*(24 - len(ide)) + ide)]
-            user = userCol.find_one({'documentId': obj[0]})
-            if (user['actualService'] is None):
-                userCol.update_one({'documentId': obj[0]}, {'$set': {'actualService': content['token']} } )
+            user = user_col.find_one({'documentId': obj[0]})
+            print('actual service', user)
+            if user['actualService'] is None:
+                user_col.update_one({'documentId': obj[0]}, {'$set': {'actualService': content['token']} } )
                 content['equipments'].append(user['equipmentId'])
                 content['firstNames'].append(user['firstName'])
                 content['usersId'] = obj
@@ -283,110 +287,116 @@ class Services(MongoDriver):
         return response
 
     def add_user_to(self, content):
-        #user_db = Mongo.UserInfo
+        # user_db = Mongo.UserInfo
         response = {'message': None}
-        userCol = self.user_col
-        #content = request.get_json()
+        user_col = self.user_col
+        # content = request.get_json()
         ide = content['userId']
-        idObj = ObjectId('0'*( 24 - len(ide) ) + ide )
-        #services = Mongo.Services
+        id_obj = ObjectId('0'*(24 - len(ide)) + ide)
+        # services = Mongo.Services
         collec = self.serv_col
         service = collec.find_one({'token': ObjectId(self.service_token)})
-        if ( len(service['usersId']) >= service['subscriberQuantity'] ):
+
+        if len(service['usersId']) >= service['subscriberQuantity']:
             response['message'] = 'Service is full'
             return response
-        if (service['secretId'] != content['secretId']):
+
+        if service['secretId'] != content['secretId']:
             response['message'] = 'Invalid key'
             return response
-        if (not service['isUsable']):
+
+        if not service['isUsable']:
             response['message'] = 'Service already deleted'
             return response
-        user = userCol.find_one({'documentId': idObj})
-        if (user['actualService'] is not None):
+
+        user = user_col.find_one({'documentId': id_obj})
+        if user['actualService'] is not None:
             response['message'] = 'User is already on a service'
             return response
-        #print(service)
-        #newUserQuery = { "documentId": ObjectId('0'*( 24 - len(ide) ) + ide ) }
-        #print(content['serviceToken'])
-        serviceQuery = { 'token': ObjectId(content['serviceToken']) }
-        service['usersId'].append(idObj)
+        # print(service)
+        # newUserQuery = { "documentId": ObjectId('0'*( 24 - len(ide) ) + ide ) }
+        # print(content['serviceToken'])
+
+        service_query = {'token': ObjectId(content['serviceToken'])}
+        service['usersId'].append(id_obj)
         service['equipments'].append(user['equipmentId'])
         service['firstNames'].append(user['firstName'])
-        newvalues = { "$set": { "usersId": service['usersId'], "equipments": service['equipments'], "firstNames": service['firstNames'] } }
-        #Equipments": service['Users_id'] },\
-        #"$set": { "firstNames": service['firstNames'] } }
-        collec.update_one(serviceQuery, newvalues)
-        #newUserID = { "$set": { "usersId": service['usersId'] } }
-        #newUserID = { "$set": { "Users_id": ["1","2","3"] } }
-        #collec.update_one(serviceQuery,newUserID)
-        #newUserEq = {"$set": { "equipments": service['equipments'] } }
-        #collec.update_one(serviceQuery,newUserEq)
-        #newUserFi = {"$set": { "firstNames": service['firstNames'] } }
-        #collec.update_one(serviceQuery,newUserFi)
+        new_values = {"$set": {"usersId": service['usersId'], "equipments": service['equipments'], "firstNames": service['firstNames']}}
+        # Equipments": service['Users_id'] },\
+        # "$set": { "firstNames": service['firstNames'] } }
+        collec.update_one(service_query, new_values)
+        # newUserID = { "$set": { "usersId": service['usersId'] } }
+        # newUserID = { "$set": { "Users_id": ["1","2","3"] } }
+        # collec.update_one(serviceQuery,newUserID)
+        # newUserEq = {"$set": { "equipments": service['equipments'] } }
+        # collec.update_one(serviceQuery,newUserEq)
+        # newUserFi = {"$set": { "firstNames": service['firstNames'] } }
+        # collec.update_one(serviceQuery,newUserFi)
         response['message'] = 'success'
         return response
 
     def kill_one(self):
-        #user_db = Mongo.UserInfo
-        userCol = self.user_col
-        servCol = self.serv_col
+        # user_db = Mongo.UserInfo
+        user_col = self.user_col
+        serv_col = self.serv_col
         response = {'message': None}
-        #token = request.args.get('token')
-        if (self.service_token is None):
+        # token = request.args.get('token')
+        if self.service_token is None:
             response['message'] = 'Service not found'
             return response
-        service = servCol.find_one({'token': ObjectId(self.service_token)})
-        if (service is None or not service['isUsable']):
+        service = serv_col.find_one({'token': ObjectId(self.service_token)})
+
+        if service is None or not service['isUsable']:
             response['message'] = 'Service not existing'
             return response
-        #print(service['usersId'])
+        # print(service['usersId'])
 
-        if (service['usersId'].index(ObjectId(self.user_id)) != 0):
+        if service['usersId'].index(ObjectId(self.user_id)) != 0:
             service['usersId'].remove(ObjectId(self.user_id))
-            userCol.update_one({'documentId': ObjectId(self.user_id)}, {'$set': {'actualService': None} })
-            servCol.update_one({'token': ObjectId(self.service_token)}, {'$set': {'usersId': service['usersId']} })
+            user_col.update_one({'documentId': ObjectId(self.user_id)}, {'$set': {'actualService': None}})
+            serv_col.update_one({'token': ObjectId(self.service_token)}, {'$set': {'usersId': service['usersId']}})
             response['message'] = 'success'
             return response
 
         for userId in service['usersId']:
-            #print(userCol.find_one({'documentId': userId}))
-            userCol.update_one({'documentId': userId}, {'$set': {'actualService': None} } )
-        servCol.update_one({'token': ObjectId(self.service_token)}, {'$set': {'isUsable': False} })
+            # print(user_col.find_one({'documentId': userId}))
+            user_col.update_one({'documentId': userId}, {'$set': {'actualService': None}})
+        serv_col.update_one({'token': ObjectId(self.service_token)}, {'$set': {'isUsable': False}})
         response['message'] = 'success'
         return response
 
     def show_one(self):
-        #content = request.get_json()
-        #user_db = Mongo.UserInfo
-        #print(request.args.get('token'))
-        #token = request.args.get('token')
+        # content = request.get_json()
+        # user_db = Mongo.UserInfo
+        # print(request.args.get('token'))
+        # token = request.args.get('token')
         response = {'message': None, 'content': None}
-        #userCol = self.user_col
-        servCol = self.serv_col
+        # user_col = self.user_col
+        serv_col = self.serv_col
         if (self.service_token is None):
             response['message'] = 'Service not found'
             return response
-        idObj = ObjectId(self.service_token)
-        service = servCol.find_one({'token': idObj})
-        #print(service)
-        if (service is None or not service['isUsable']):
+        id_obj = ObjectId(self.service_token)
+        service = serv_col.find_one({'token': id_obj})
+        # print(service)
+        if service is None or not service['isUsable']:
             response['message'] = 'Service not existing'
             return response
         service['token'] = str(service['token'])
-        service['equipments'] = [str(equipment)[-16:] for equipment in service['equipments']] #openflow ID has 16 chars
-        service['usersId'] = [str(Id)[-11:] for Id in service['usersId']] #National ID has 11 chars
+        service['equipments'] = [str(equipment)[-16:] for equipment in service['equipments']]  # openflow ID has 16 chars
+        service['usersId'] = [str(Id)[-11:] for Id in service['usersId']]  # National ID has 11 chars
         service['_id'] = str(service['_id'])
         service['startDate'] = str(service['startDate'])
         service['endDate'] = str(service['endDate'])
-        #print(equipments)
-        #service['equipments']
-        #print(type(service))
-        #for key in service:
-            #if ( type(service[key]) == type(idObj) ):
-                #service[key] = str(service[key])
-            #elif ( type(service[key]) == list ):
-                #list(map(str,service[key])) # change all items in the list to string
-        #print (service)
+        # print(equipments)
+        # service['equipments']
+        # print(type(service))
+        # for key in service:
+        #    if ( type(service[key]) == type(id_obj) ):
+        #        service[key] = str(service[key])
+        #    elif ( type(service[key]) == list ):
+        #        list(map(str,service[key])) # change all items in the list to string
+        # print (service)
         response['message'] = 'success'
         response['content'] = service
         return response

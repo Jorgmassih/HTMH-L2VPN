@@ -139,6 +139,7 @@ def create_a_service():
     print(content)
     content['usersId'] = [username]
     result = services.create_one(content)
+    print(result)
     if (result['serviceToken'] is None):
         return Response(json.dumps(result), status=401)
     return Response(json.dumps(result), status=201)
