@@ -1,6 +1,7 @@
 import re
 import string
 import ipaddress
+from datetime import datetime
 
 
 class CheckFor:
@@ -34,3 +35,14 @@ class IpHandler:
     def increment_third_octet(ip: str, number_of_times: int = 1):
         result_ip = str(ipaddress.ip_address(ip) + 256 * number_of_times)
         return result_ip
+
+
+def get_fee(start_datetime: str, end_datetime: str, subscribers_num: str):
+    factor = 1.5
+    fmt = '%Y-%m-%dT%H:%M'
+    d1 = datetime.strptime(start_datetime, fmt)
+    d2 = datetime.strptime(end_datetime, fmt)
+    minutes = (d2 - d1).total_seconds() / 60.0
+
+    return minutes * factor * int(subscribers_num)
+

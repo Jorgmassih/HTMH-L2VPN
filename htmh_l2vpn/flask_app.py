@@ -3,6 +3,7 @@ from functools import wraps
 from flask import Flask, request, Response
 
 from htmh_l2vpn.mongodb.mongo_driver import User, UserNetworkAnatomy
+from htmh_l2vpn.utils.utils import get_fee
 from htmh_l2vpn.web_services_stuff.jwt_handler import WebToken
 import json
 
@@ -113,6 +114,17 @@ def change_friendly_name():
                                                                           new_friendly_name=data['newFriendlyName'])
     if update_result:
         return Response(status=204)
+
+    return Response(status=500)
+
+
+@app.route('/api/v1/compute/<variable>', methods=['POST'])
+@auth_required
+def compute(variable):
+    if variable == 'fee':
+        data = request.get_json()
+        fee = get_fee(data['startDatetime'], data['endDatetime'], data['subs'])
+        return Response(json.dumps({'fee': '$ ' + str(fee)}), status=200)
 
     return Response(status=500)
 
