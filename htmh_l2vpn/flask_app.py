@@ -157,5 +157,17 @@ def add_user_to_service():
     return Response(json.dumps(result), status=200)
 
 
+@app.route('/api/v1/services/htmh/kill/', methods = ["DELETE"])
+@auth_required
+def kill_a_service():
+    token = request.cookies.get('_access_token_')
+    username = jwt.decode_token(token)['sub']
+    services = Services(username)
+    result = services.kill_one()
+    if (result['message'] != 'success'):
+        return Response(json.dumps(result), status=401)
+    return Response(json.dumps(result), status=200)
+
+
 if __name__ == '__main__':
     app.run(debug=True)
