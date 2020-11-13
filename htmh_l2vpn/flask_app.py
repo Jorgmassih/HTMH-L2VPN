@@ -140,7 +140,8 @@ def create_a_service():
     content['usersId'] = [username]
     result = services.create_one(content)
     print(result)
-    if (result['serviceToken'] is None):
+
+    if result['serviceToken'] is None:
         return Response(json.dumps(result), status=401)
     return Response(json.dumps(result), status=201)
 
@@ -178,7 +179,7 @@ def show_a_service():
     username = jwt.decode_token(token)['sub']
     services = Services(username)
     result = services.show_one()
-    if (result['message'] != 'success'):
+    if result['message'] != 'success':
         return Response(json.dumps(result), status=401)
     return Response(json.dumps(result['content']), status=200)
 

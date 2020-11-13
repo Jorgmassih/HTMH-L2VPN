@@ -219,6 +219,23 @@ class User(MongoDriver):
         return True
 
     @property
+    def actual_service(self):
+        query = {"documentId": self.user}
+        actual_service = self.collection.find_one(filter=query)['actualService']
+
+        return actual_service
+
+    @actual_service.setter
+    def actual_service(self, service_token):
+        self.collection.update_one({'documentId': self.user}, {'$set': {'actualService': service_token}})
+
+    @property
+    def first_name(self):
+        query = {"documentId": self.user}
+        first_name = self.collection.find_one(filter=query)['firstName']
+        return first_name
+
+    @property
     def equipment_id(self):
         query = {"documentId": self.user}
         device = self.collection.find_one(filter=query)['equipmentId']
@@ -250,7 +267,6 @@ class Services(MongoDriver):
         return token
 
     def create_one(self, content):
-        user_col = self.user_col
         response = {'serviceToken': None, 'message': None}
         content['equipments'] = []
         content['firstNames'] = []
@@ -271,38 +287,20 @@ class Services(MongoDriver):
             response['message'] = 'Service minimum time is 30 minutes'
             return response
 
-        content['token'] = ObjectId(generate())
+        service_token = ObjectId(generate())
+        content['token'] = service_token
 
-        user = self.user_col.find_one({'documentId': self.user.user})
-        print(self.user.user)
-
-        if user['actualService'] is None:
-            user_col.update_one({'documentId': self.user.user}, {'$set': {'actualService': content['token']}})
-            content['equipments'].append(user['equipmentId'])
-            content['firstNames'].append(user['firstName'])
+        if self.user.actual_service is None:
+            self.user.actual_service = service_token
+            content['equipments'].append(self.user.equipment_id)
+            content['firstNames'].append(self.user.first_name)
             content['usersId'] = [self.user.user]
         else:
             response['message'] = 'The User is already on another service'
             return response
 
-
-        # Bug here
-        # usersId is not created yet at content dict
-        # for ide in content["usersId"]:
-        #     obj = [ObjectId('0'*(24 - len(ide)) + ide)]
-        #     user = user_col.find_one({'documentId': obj[0]})
-        #     print('actual service', user)
-        #     if user['actualService'] is None:
-        #         user_col.update_one({'documentId': obj[0]}, {'$set': {'actualService': content['token']} } )
-        #         content['equipments'].append(user['equipmentId'])
-        #         content['firstNames'].append(user['firstName'])
-        #         content['usersId'] = obj
-        #     else:
-        #         response['message'] = 'One of the Users is already on another service'
-        #         return response
-
         collec = self.serv_col
-        collec.insert_one(content).inserted_id
+        inserting = collec.insert_one(content).inserted_id
         response['message'] = 'success'
         response['serviceToken'] = str(content['token'])
         return response
