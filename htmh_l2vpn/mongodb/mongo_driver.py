@@ -186,16 +186,21 @@ class User(MongoDriver):
     def __init__(self, user_id: str):
         MongoDriver.__init__(self, db_name='UserInfo')
         self.collection = self.db['User']
-        self._user = ObjectId('0'*13 + user_id)
+        self.user = ObjectId('0'*13 + user_id)
+
+    @property
+    def user_str(self):
+        user = str(self.user)[-11:]
+        return user
 
     def is_logged(self):
-        print(self._user)
-        query = {"documentId": self._user, "webApp.logged": True}
+        print(self.user)
+        query = {"documentId": self.user, "webApp.logged": True}
 
         return True if self.collection.find_one(query) else False
 
     def login(self, password):
-        query = {"documentId": self._user, "webApp.logged": False, "webApp.password": password}
+        query = {"documentId": self.user, "webApp.logged": False, "webApp.password": password}
         update = self.collection.find_one_and_update(filter=query, update={'$set': {'webApp.logged': True}},
                                                      upsert=False, return_document=True)
         if not update:
@@ -205,7 +210,7 @@ class User(MongoDriver):
         return True
 
     def logout(self):
-        query = {"documentId": self._user, "webApp.logged": True}
+        query = {"documentId": self.user, "webApp.logged": True}
         update = self.collection.find_one_and_update(filter=query, update={'$set': {'webApp.logged': False}},
                                                      upsert=False, return_document=True)
         if not update:
@@ -215,19 +220,20 @@ class User(MongoDriver):
 
     @property
     def equipment_id(self):
-        query = {"documentId": self._user}
+        query = {"documentId": self.user}
         device = self.collection.find_one(filter=query)['equipmentId']
         return device
 
 
 class Services(MongoDriver):
     def __init__(self, user_id):
-        self.user_id = user_id
+        self.user = User(user_id=user_id)
+        self.user_id = User.user_str
         MongoDriver.__init__(self, db_name='Services')
 
     @property
     def user_col(self):
-        self.db_name = 'Userinfo'
+        self.db_name = 'UserInfo'
         return self.db['User']
 
     @property
@@ -239,7 +245,7 @@ class Services(MongoDriver):
     def service_token(self):
         user_col = self.user_col
         # serv_col = self.serv_col
-        user = user_col.find_one({'documentId': self.user_id})
+        user = user_col.find_one({'documentId': self.user.user})
         token = user['actualService']
         return token
 
@@ -266,20 +272,35 @@ class Services(MongoDriver):
             return response
 
         content['token'] = ObjectId(generate())
+
+        user = self.user_col.find_one({'documentId': self.user.user})
+        print(self.user.user)
+
+        if user['actualService'] is None:
+            user_col.update_one({'documentId': self.user.user}, {'$set': {'actualService': content['token']}})
+            content['equipments'].append(user['equipmentId'])
+            content['firstNames'].append(user['firstName'])
+            content['usersId'] = [self.user.user]
+        else:
+            response['message'] = 'The User is already on another service'
+            return response
+
+
         # Bug here
         # usersId is not created yet at content dict
-        for ide in content["usersId"]:
-            obj = [ObjectId('0'*(24 - len(ide)) + ide)]
-            user = user_col.find_one({'documentId': obj[0]})
-            print('actual service', user)
-            if user['actualService'] is None:
-                user_col.update_one({'documentId': obj[0]}, {'$set': {'actualService': content['token']} } )
-                content['equipments'].append(user['equipmentId'])
-                content['firstNames'].append(user['firstName'])
-                content['usersId'] = obj
-            else:
-                response['message'] = 'One of the Users is already on another service'
-                return response
+        # for ide in content["usersId"]:
+        #     obj = [ObjectId('0'*(24 - len(ide)) + ide)]
+        #     user = user_col.find_one({'documentId': obj[0]})
+        #     print('actual service', user)
+        #     if user['actualService'] is None:
+        #         user_col.update_one({'documentId': obj[0]}, {'$set': {'actualService': content['token']} } )
+        #         content['equipments'].append(user['equipmentId'])
+        #         content['firstNames'].append(user['firstName'])
+        #         content['usersId'] = obj
+        #     else:
+        #         response['message'] = 'One of the Users is already on another service'
+        #         return response
+
         collec = self.serv_col
         collec.insert_one(content).inserted_id
         response['message'] = 'success'
@@ -373,7 +394,7 @@ class Services(MongoDriver):
         response = {'message': None, 'content': None}
         # user_col = self.user_col
         serv_col = self.serv_col
-        if (self.service_token is None):
+        if self.service_token is None:
             response['message'] = 'Service not found'
             return response
         id_obj = ObjectId(self.service_token)
