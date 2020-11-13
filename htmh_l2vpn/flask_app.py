@@ -143,5 +143,19 @@ def create_a_service():
     return Response(json.dumps(result), status=201)
 
 
+@app.route('/api/v1/services/htmh/add-user/', methods = ['PUT'])
+@auth_required
+def add_user_to_service():
+    token = request.cookies.get('_access_token_')
+    username = jwt.decode_token(token)['sub']
+    services = Services(username)
+    content = request.get_json()
+    content['userId'] = [username]
+    result = services.add_user_to(content)
+    if (result['message'] != 'success'):
+        return Response(json.dumps(result), status=401)
+    return Response(json.dumps(result), status=200)
+
+
 if __name__ == '__main__':
     app.run(debug=True)
