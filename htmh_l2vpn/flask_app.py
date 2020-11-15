@@ -100,7 +100,15 @@ def device_list():
     user = jwt.decode_token(token)['sub']
     d_list = UserNetworkAnatomy(user_id=user).get_devices_list()
 
-    return Response(json.dumps({'data': d_list}), status=200)
+    subscribers_list = Services(user_id=user).htmh_subscribers['subs_list']
+    others_devices = [{'name': subscriber['name'],
+                       'equipment': subscriber['equipment'],
+                       'devices': UserNetworkAnatomy(user_id=subscriber['userId']).get_devices_list()}
+                      for subscriber in subscribers_list]
+
+    all_devices_list = {'userDevices': d_list, 'othersDevices': others_devices}
+
+    return Response(json.dumps(all_devices_list), status=200)
 
 
 @app.route('/api/v1/device/set-friendly-name', methods=['PUT'])
@@ -136,8 +144,6 @@ def create_a_service():
     username = jwt.decode_token(token)['sub']
     services = Services(username)
     content = request.get_json()['serviceData']
-    print(content)
-    content['usersId'] = [username]
     result = services.create_one(content)
     print(result)
 
@@ -151,16 +157,20 @@ def create_a_service():
 def add_user_to_service():
     token = request.cookies.get('_access_token_')
     username = jwt.decode_token(token)['sub']
-    services = Services(username)
-    content = request.get_json()
-    content['userId'] = [username]
-    result = services.add_user_to(content)
-    if (result['message'] != 'success'):
-        return Response(json.dumps(result), status=401)
-    return Response(json.dumps(result), status=200)
+
+    service = Services(username)
+    content = request.get_json()['serviceData']
+    result = service.add_user_to(content)
+
+    print(result)
+
+    if result:
+        return Response(json.dumps({'message': result}), status=401)
+
+    return Response(json.dumps(result), status=201)
 
 
-@app.route('/api/v1/services/htmh/kill/', methods = ["DELETE"])
+@app.route('/api/v1/services/htmh/kill', methods=["DELETE"])
 @auth_required
 def kill_a_service():
     token = request.cookies.get('_access_token_')
@@ -172,15 +182,17 @@ def kill_a_service():
     return Response(json.dumps(result), status=200)
 
 
-@app.route('/api/v1/services/htmh/show/')
+@app.route('/api/v1/services/htmh/get')
 @auth_required
 def show_a_service():
     token = request.cookies.get('_access_token_')
     username = jwt.decode_token(token)['sub']
     services = Services(username)
     result = services.show_one()
-    if result['message'] != 'success':
+    print(result)
+    if not result['content']:
         return Response(json.dumps(result), status=401)
+
     return Response(json.dumps(result['content']), status=200)
 
 

@@ -241,6 +241,15 @@ class User(MongoDriver):
         device = self.collection.find_one(filter=query)['equipmentId']
         return device
 
+    @property
+    def fullname(self):
+        query = {"documentId": self.user}
+        user = self.collection.find_one(filter=query)
+        first_name = user['firstName']
+        last_name = user['lastName']
+
+        return first_name + ' ' + last_name
+
 
 class Services(MongoDriver):
     def __init__(self, user_id):
@@ -266,14 +275,35 @@ class Services(MongoDriver):
         token = user['actualService']
         return token
 
+    @property
+    def htmh_subscribers(self):
+        service = self.serv_col.find_one({'token': self.user.actual_service})
+        response = None
+        subscribers_list = []
+
+        if not service:
+            response = 'This user is not subscribed to any service'
+            return {'response': response, 'subs_list': subscribers_list}
+
+        subscribers_list = [{'userId': str(subscriber['userId'])[-11:],
+                             'name': subscriber['name'],
+                             'equipment': str(subscriber['equipment'])[-16:]}
+                            for subscriber in service['subscribers'] if subscriber['userId'] != self.user.user]
+
+        return {'response': response, 'subs_list': subscribers_list}
+
     def create_one(self, content):
         response = {'serviceToken': None, 'message': None}
-        content['equipments'] = []
-        content['firstNames'] = []
+
+        content['subscribers'] = []
         content['isRunning'] = False
         content['isUsable'] = True
-        content['startDatetime'] = datetime.datetime.strptime(content['startDatetime'] + ':0.00z', "%Y-%m-%dT%H:%M:%S.%fz")
-        content['endDatetime'] = datetime.datetime.strptime(content['endDatetime'] + ':0.00z', "%Y-%m-%dT%H:%M:%S.%fz")
+        content['permitRun'] = False
+        content['subscribersNum'] = int(content['subscribersNum'])
+        content['startDatetime'] = datetime.datetime.strptime(content['startDatetime'] + ':0.00z',
+                                                              "%Y-%m-%dT%H:%M:%S.%fz")
+        content['endDatetime'] = datetime.datetime.strptime(content['endDatetime'] + ':0.00z',
+                                                            "%Y-%m-%dT%H:%M:%S.%fz")
 
         if content['startDatetime'] > content['endDatetime']:
             response['message'] = 'Invalid dates'
@@ -290,11 +320,11 @@ class Services(MongoDriver):
         service_token = ObjectId(generate())
         content['token'] = service_token
 
-        if self.user.actual_service is None:
+        if not self.user.actual_service:
             self.user.actual_service = service_token
-            content['equipments'].append(self.user.equipment_id)
-            content['firstNames'].append(self.user.first_name)
-            content['usersId'] = [self.user.user]
+            content['subscribers'].append({'name': self.user.fullname,
+                                           'equipment': self.user.equipment_id,
+                                           'userId': self.user.user})
         else:
             response['message'] = 'The User is already on another service'
             return response
@@ -306,52 +336,43 @@ class Services(MongoDriver):
         return response
 
     def add_user_to(self, content):
-        # user_db = Mongo.UserInfo
-        response = {'message': None}
-        user_col = self.user_col
-        # content = request.get_json()
-        ide = content['userId']
-        id_obj = ObjectId('0'*(24 - len(ide)) + ide)
-        # services = Mongo.Services
+        response = None
+
         collec = self.serv_col
-        service = collec.find_one({'token': ObjectId(self.service_token)})
+        token = ObjectId(content['serviceToken'])
+        secret_key = content['secretKey']
+        service = collec.find_one({'token': token})
 
-        if len(service['usersId']) >= service['subscriberQuantity']:
-            response['message'] = 'Service is full'
-            return response
-
-        if service['secretId'] != content['secretId']:
-            response['message'] = 'Invalid key'
+        if not service:
+            response = 'Invalid Token'
             return response
 
         if not service['isUsable']:
-            response['message'] = 'Service already deleted'
+            response = 'Service already deleted'
             return response
 
-        user = user_col.find_one({'documentId': id_obj})
-        if user['actualService'] is not None:
-            response['message'] = 'User is already on a service'
+        if self.user.actual_service:
+            response = 'User is already on a service'
             return response
-        # print(service)
-        # newUserQuery = { "documentId": ObjectId('0'*( 24 - len(ide) ) + ide ) }
-        # print(content['serviceToken'])
 
-        service_query = {'token': ObjectId(content['serviceToken'])}
-        service['usersId'].append(id_obj)
-        service['equipments'].append(user['equipmentId'])
-        service['firstNames'].append(user['firstName'])
-        new_values = {"$set": {"usersId": service['usersId'], "equipments": service['equipments'], "firstNames": service['firstNames']}}
-        # Equipments": service['Users_id'] },\
-        # "$set": { "firstNames": service['firstNames'] } }
-        collec.update_one(service_query, new_values)
-        # newUserID = { "$set": { "usersId": service['usersId'] } }
-        # newUserID = { "$set": { "Users_id": ["1","2","3"] } }
-        # collec.update_one(serviceQuery,newUserID)
-        # newUserEq = {"$set": { "equipments": service['equipments'] } }
-        # collec.update_one(serviceQuery,newUserEq)
-        # newUserFi = {"$set": { "firstNames": service['firstNames'] } }
-        # collec.update_one(serviceQuery,newUserFi)
-        response['message'] = 'success'
+        if not (len(service['subscribers']) <= service['subscribersNum']):
+            response = 'Service is full'
+            return response
+
+        if service['secretKey'] != secret_key:
+            response = 'Invalid key'
+            return response
+
+        service['subscribers'].append({'name': self.user.fullname,
+                                       'equipment': self.user.equipment_id,
+                                       'userId': self.user.user})
+
+        new_values = {"$set": service}
+
+        self.user.actual_service = token
+
+        collec.update_one({'token': token}, new_values)
+
         return response
 
     def kill_one(self):
@@ -385,37 +406,37 @@ class Services(MongoDriver):
         return response
 
     def show_one(self):
-        # content = request.get_json()
-        # user_db = Mongo.UserInfo
-        # print(request.args.get('token'))
-        # token = request.args.get('token')
         response = {'message': None, 'content': None}
-        # user_col = self.user_col
+
         serv_col = self.serv_col
-        if self.service_token is None:
+        if self.user.actual_service is None:
             response['message'] = 'Service not found'
             return response
-        id_obj = ObjectId(self.service_token)
-        service = serv_col.find_one({'token': id_obj})
-        # print(service)
-        if service is None or not service['isUsable']:
+
+        service_info = serv_col.find_one({'token': self.user.actual_service})
+
+        if service_info is None or not service_info['isUsable']:
             response['message'] = 'Service not existing'
             return response
-        service['token'] = str(service['token'])
-        service['equipments'] = [str(equipment)[-16:] for equipment in service['equipments']]  # openflow ID has 16 chars
-        service['usersId'] = [str(Id)[-11:] for Id in service['usersId']]  # National ID has 11 chars
-        service['_id'] = str(service['_id'])
-        service['startDate'] = str(service['startDate'])
-        service['endDate'] = str(service['endDate'])
-        # print(equipments)
-        # service['equipments']
-        # print(type(service))
-        # for key in service:
-        #    if ( type(service[key]) == type(id_obj) ):
-        #        service[key] = str(service[key])
-        #    elif ( type(service[key]) == list ):
-        #        list(map(str,service[key])) # change all items in the list to string
-        # print (service)
+
+        result_service = dict()
+
+        result_service['serviceToken'] = str(service_info['token'])
+
+        result_service['subscribersList'] = [{'name': subscriber['name'],
+                                              'equipment': str(subscriber['equipment'])[-16:]}
+                                             for subscriber in service_info['subscribers']]
+
+        result_service['subsNum'] = str(len(service_info['subscribers'])) + '/' + str(service_info['subscribersNum'])
+        result_service['startDatetime'] = str(service_info['startDatetime'])
+        result_service['endDatetime'] = str(service_info['endDatetime'])
+        result_service['active'] = 'Yes' if service_info['isRunning'] else 'No'
+        is_owner = True if self.user.user == service_info['subscribers'][0]['userId'] else False
+        result_service['isOwner'] = is_owner
+        result_service['secretKey'] = service_info['secretKey'] if is_owner else ''
+        result_service['permitRun'] = service_info['permitRun'] if is_owner else None
+
         response['message'] = 'success'
-        response['content'] = service
+        response['content'] = result_service
+
         return response
