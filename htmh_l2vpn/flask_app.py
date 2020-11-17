@@ -2,10 +2,14 @@ from functools import wraps
 
 from flask import Flask, request, Response
 
+from htmh_l2vpn.access_handler.access_handler import AccessHandler
 from htmh_l2vpn.mongodb.mongo_driver import User, UserNetworkAnatomy, Services
 from htmh_l2vpn.utils.utils import get_fee
+from htmh_l2vpn.watchdog.watchdog import Watchdog
 from htmh_l2vpn.web_services_stuff.jwt_handler import WebToken
 import json
+
+
 
 app = Flask(__name__)
 
@@ -13,6 +17,12 @@ secret_key = "secret"
 jwt = WebToken(secret_key=secret_key)
 
 allowed_cross_domains = ['http://127.0.0.1:3000']
+
+
+watchdog = Watchdog()
+watchdog.watch_links = True
+watchdog.watch_hosts = True
+watchdog.run()
 
 
 def auth_required(f):

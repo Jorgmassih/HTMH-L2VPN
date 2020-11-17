@@ -1,13 +1,16 @@
 from htmh_l2vpn.access_switch.access_switch import AccessSw
+from htmh_l2vpn.mongodb.mongo_driver import NetworkAnatomy, HTMHDevice
 
 from htmh_l2vpn.onos.onos import ONOSDriver
 
 from itertools import combinations
-from htmh_l2vpn.watchdog.watchdog import Watchdog
+
+
 
 class AccessHandler:
-
     def __init__(self):
+        self.na = NetworkAnatomy()
+        self.access_devices = self.na.access_devices_ids
         self.switches_id = {'of:0000c27e34dffd4f', 'of:0000068f79daf149',
                             'of:00006a2f1bc24a4c', 'of:0000823c3afb9d4c',
                             'of:000096510082cc4f'}
@@ -17,26 +20,26 @@ class AccessHandler:
         self.access_sw = dict([(sw_id, AccessSw(id=sw_id, public_mac=self.onos_driver.get_sw_public_mac(sw_id)))
                           for sw_id in self.switches_id])
 
-        self.watchdog = Watchdog()
-        self.watchdog.watch_links = True
-        self.watchdog.run()
-
     def set_normal_functions(self):
-        for host in self.onos_driver.get_hosts():
-            host_location = host['locations'][0]['elementId']
-            mac = host['mac']
-            ip = host['ipAddresses'][0]
-            port = host['locations'][0]['port']
-
-            self.access_sw[host_location].add_host(mac=mac, ip=ip, port=port)
-
         # Install internal fwd flows and arp
-        for sw in list(self.access_sw.values()):
-            if len(sw) > 1:
-                self.onos_driver.install_arp_flow(device_id=sw.device_id, hosts=sw.hosts,
-                                                  ports=sw.active_ports)
-                for pair in sw.pairs_mac:
+        for sw in self.access_devices:
+            device = HTMHDevice(device_id=sw)
+            hosts = device.hosts
+            if len(hosts) > 1:
+                self.onos_driver.install_arp_flow(device_id=device.of_id, hosts=device.hosts,
+                                                  ports=device.active_ports)
+                for pair in device.pairs_mac:
                     self.onos_driver.install_intents(macs_pair=pair)
+
+    @staticmethod
+    def device_normal_functions(device_id):
+        device = HTMHDevice(device_id=device_id)
+
+        hosts = device.hosts
+        if len(hosts) > 1:
+            ONOSDriver().install_arp_flow(device_id=device.of_id, hosts=device.hosts, ports=device.active_ports)
+            for pair in device.pairs_mac:
+                ONOSDriver().install_intents(macs_pair=pair)
 
     def create_l2vpn(self, devices: list, service_token: str):
         devices_pair = combinations(devices, 2)

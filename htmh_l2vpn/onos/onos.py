@@ -73,13 +73,11 @@ class ONOSDriver:
 
         interfaces = []
 
-        macs = list(hosts.keys())
-
-        for mac in macs:
+        for host in hosts:
             interface = {
-                "name": "{}/{}".format(device_id, mac),
-                "ips": [hosts[mac]['ip'] + '/16'],
-                "mac": mac.lower()
+                "name": "{}/{}".format(device_id, host['mac']),
+                "ips": [host['ip'] + '/16'],
+                "mac": host['mac'].lower()
             }
 
             interfaces.append(interface)
@@ -210,6 +208,7 @@ class ONOSDriver:
     def get_links(self):
         self.config.collection = 'Endpoints'
         self.config.doc = 'links'
+
         response = requests.get(self.config.get_all_links.format(self.url), headers=self.headers,
                                 auth=self.auth).json()['links']
         return response

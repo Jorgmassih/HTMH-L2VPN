@@ -1,7 +1,13 @@
+import copy
+import itertools
+
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from random_object_id import generate
 import datetime
+
+from htmh_l2vpn.utils.utils import IpHandler
+
 
 class MongoDriver:
     def __init__(self, db_name: str):
@@ -80,13 +86,14 @@ class NetworkAnatomy(MongoDriver):
 
     @hosts.setter
     def hosts(self, hosts: list):
-        collection = self.db['AnatomyHosts']
-        collection.delete_many({})
-        for i in range(len(hosts)):
-            if not hosts[i].get('deviceId'):
-                hosts[i] = self.convert_host_format(host=hosts[i])
+        if hosts:
+            collection = self.db['AnatomyHosts']
+            collection.delete_many({})
+            for i in range(len(hosts)):
+                if not hosts[i].get('deviceId'):
+                    hosts[i] = self.convert_host_format(host=hosts[i])
 
-        collection.insert_many(hosts)
+            collection.insert_many(hosts)
 
     @property
     def hosts_ids(self):
@@ -97,6 +104,12 @@ class NetworkAnatomy(MongoDriver):
     def access_devices(self):
         collection = self.db['AnatomyAccessDevices']
         devices = list(collection.find())
+        return devices
+
+    @property
+    def access_devices_ids(self):
+        devices = self.access_devices
+        devices = [device['_id'] for device in devices]
         return devices
 
     @property
@@ -113,14 +126,15 @@ class NetworkAnatomy(MongoDriver):
 
     @links.setter
     def links(self, new_links: list):
-        collection = self.db['AnatomyLinks']
-        collection.delete_many({})
-        for link in new_links:
+        if new_links:
+            collection = self.db['AnatomyLinks']
+            collection.delete_many({})
+            for link in new_links:
 
-            link_id = '{}-{}-{}-{}'.format(link['src']['device'], link['src']['port'],
-                                           link['dst']['device'], link['dst']['port'])
-            link['_id'] = link_id
-        collection.insert_many(new_links)
+                link_id = '{}-{}-{}-{}'.format(link['src']['device'], link['src']['port'],
+                                               link['dst']['device'], link['dst']['port'])
+                link['_id'] = link_id
+            collection.insert_many(new_links)
 
     @property
     def links_ids(self):
@@ -155,6 +169,96 @@ class NetworkAnatomy(MongoDriver):
             ids_to_compare.add(link_id)
 
         return self.links_ids - ids_to_compare, ids_to_compare - self.links_ids
+
+
+class HTMHDevice(MongoDriver):
+
+    class DeviceIdentifier(MongoDriver):
+        def __init__(self, device_id: ObjectId):
+            MongoDriver.__init__(self, db_name='Services')
+            self.collection = self.db['Htmh']
+            self.device_id = device_id
+
+        def devices_in_same_service(self):
+            query = {'subscribers': {'$elemMatch': {'equipment': self.device_id}}}
+            devices = self.collection.find_one(query)['subscribers']
+            devices = [device['equipment'] for device in devices if device['equipment'] != self.device_id]
+            return devices
+
+    def __init__(self, device_id):
+        MongoDriver.__init__(self, db_name='NetworkStatus')
+
+        if type(device_id) is str:
+            self.device_id = ObjectId('0'*8 + device_id.lower()[3:])
+
+        elif type(device_id) is ObjectId:
+            self.device_id = device_id
+
+    @property
+    def of_id(self):
+        of_id = 'of:' + str(self.device_id)[8:]
+        return of_id
+
+    @property
+    def hosts(self):
+        collection = self.db['AnatomyHosts']
+        query = {'deviceId': self.device_id}
+        hosts = [host for host in collection.find(query)]
+        return hosts
+
+    @hosts.setter
+    def hosts(self, new_hosts):
+        collection = self.db['AnatomyHosts']
+
+        collection.delete_many({'deviceId': self.device_id})
+        collection.insert_many(new_hosts)
+
+
+    @property
+    def foreign_hosts(self):
+        devices_id = self.DeviceIdentifier(device_id=self.device_id).devices_in_same_service()
+        hosts = [HTMHDevice(device_id=device_id).hosts for device_id in devices_id]
+        return hosts
+
+    @property
+    def pairs_mac(self):
+        if len(self.hosts) > 1:
+            macs_list = [host['mac'] for host in self.hosts]
+            pairs = itertools.combinations(macs_list, 2)
+            return pairs
+
+        return None
+
+    @property
+    def all_hosts(self):
+        hosts = self.hosts
+        foreign = self.foreign_hosts
+        if hosts or foreign:
+            hosts = []
+            hosts.append(hosts)
+            hosts.append(foreign)
+            return hosts
+
+        return None
+
+    @property
+    def active_ports(self):
+        if self.hosts:
+            ports = [host['port'] for host in self.hosts]
+            return ports
+
+        return None
+
+    def maps_ip(self, range_id):
+        hosts = self.hosts
+        for host in hosts:
+            ip = host['ip']
+            ip_to_map = IpHandler.increment_third_octet(ip=ip, number_of_times=range_id)
+            host['virtualIp'] = ip_to_map
+
+        self.hosts = hosts
+
+
 
 
 class UserNetworkAnatomy(MongoDriver):
@@ -440,3 +544,10 @@ class Services(MongoDriver):
         response['content'] = result_service
 
         return response
+
+
+if __name__ == '__main__':
+    c = GetConfig(db_name='NetworkStatus')
+    c.collection = 'Endpoints'
+    c.doc = 'links'
+    print(c.get_all_links)
