@@ -19,10 +19,6 @@ jwt = WebToken(secret_key=secret_key)
 allowed_cross_domains = ['http://127.0.0.1:3000']
 
 
-watchdog = Watchdog()
-watchdog.watch_links = True
-watchdog.watch_hosts = True
-watchdog.run()
 
 
 def auth_required(f):
@@ -207,4 +203,8 @@ def show_a_service():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    watchdog = Watchdog()
+    watchdog.watch_links = True
+    watchdog.watch_hosts = True
+    watchdog.run()
+    app.run()

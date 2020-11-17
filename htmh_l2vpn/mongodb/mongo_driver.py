@@ -21,7 +21,8 @@ class MongoDriver:
 
     @property
     def mongo_uri(self):
-        mongo_uri = "mongodb+srv://jorgmassih:Jamv1420290@htmh-db.ll4nf.gcp.mongodb.net/{}?retryWrites=true&w=majority".format(self.db_name)
+        #mongo_uri = "mongodb+srv://jorgmassih:Jamv1420290@htmh-db.ll4nf.gcp.mongodb.net/{}?retryWrites=true&w=majority".format(self.db_name)
+        mongo_uri = "mongodb://127.0.0.1:27017"
         return mongo_uri
 
 
@@ -70,11 +71,18 @@ class NetworkAnatomy(MongoDriver):
                                              host['locations'][0]['port'], host['mac'], host['ipAddresses'][0]
         host['deviceId'], host['port'], host['friendlyName'], host['ip'], host['virtualIp'] = \
             device_id, port, friendly_name, ip, ''
+
         host.pop('id')
         host.pop('locations')
         host.pop('ipAddresses')
 
         return host
+
+    def get_host_public_mac(self, device_id: ObjectId):
+        collection = self.db['AnatomyAccessDevices']
+        device = collection.find_one({'_id': device_id})
+        public_mac = device['publicMac']
+        return public_mac
 
     def _get_host_id(self, host: dict):
         if not host.get('deviceId'):
@@ -84,16 +92,30 @@ class NetworkAnatomy(MongoDriver):
         device_id = str(host['deviceId'])[8:]
         return '{}-{}'.format(mac, device_id)
 
-    @hosts.setter
-    def hosts(self, hosts: list):
+    def add_hosts(self, hosts: list):
+        hosts_ids = None
         if hosts:
             collection = self.db['AnatomyHosts']
-            collection.delete_many({})
-            for i in range(len(hosts)):
-                if not hosts[i].get('deviceId'):
-                    hosts[i] = self.convert_host_format(host=hosts[i])
+            new_hosts = self.new_host(hosts)
 
-            collection.insert_many(hosts)
+            if new_hosts:
+                hosts_to_insert = []
+
+                for host in hosts:
+                    if '{}-{}'.format(host['mac'], str(host['deviceId'])[8:]) not in new_hosts:
+                        continue
+
+                    host['publicMac'] = self.get_host_public_mac(host['deviceId'])
+                    hosts_to_insert.append(host)
+
+                collection.insert_many(hosts_to_insert)
+
+                hosts_ids = [ObjectId('0'*8 + host_id.split('-')[1]) for host_id in new_hosts]
+                print('New hosts are: ', new_hosts)
+                hosts_ids = set(hosts_ids)
+
+        return hosts_ids
+
 
     @property
     def hosts_ids(self):
@@ -154,9 +176,6 @@ class NetworkAnatomy(MongoDriver):
         link['_id'] = link_id
         collection.insert_one(link)
 
-    def compare_host(self, hosts_to_compare: list):
-        pass
-
     def new_host(self, hosts: list):
         ids_to_compare = set(map(self._get_host_id, hosts))
         return ids_to_compare - self.hosts_ids
@@ -185,8 +204,9 @@ class HTMHDevice(MongoDriver):
             devices = [device['equipment'] for device in devices if device['equipment'] != self.device_id]
             return devices
 
-    def __init__(self, device_id):
+    def __init__(self, device_id, is_foreign: bool = False):
         MongoDriver.__init__(self, db_name='NetworkStatus')
+        self.is_foreign = is_foreign
 
         if type(device_id) is str:
             self.device_id = ObjectId('0'*8 + device_id.lower()[3:])
@@ -203,6 +223,13 @@ class HTMHDevice(MongoDriver):
     def hosts(self):
         collection = self.db['AnatomyHosts']
         query = {'deviceId': self.device_id}
+        hosts = []
+        if self.is_foreign:
+            for host in collection.find(query):
+                host['ip'] = host['virtualIp']
+                hosts.append(host)
+            return hosts
+
         hosts = [host for host in collection.find(query)]
         return hosts
 
@@ -213,11 +240,12 @@ class HTMHDevice(MongoDriver):
         collection.delete_many({'deviceId': self.device_id})
         collection.insert_many(new_hosts)
 
-
     @property
     def foreign_hosts(self):
         devices_id = self.DeviceIdentifier(device_id=self.device_id).devices_in_same_service()
-        hosts = [HTMHDevice(device_id=device_id).hosts for device_id in devices_id]
+        hosts = [HTMHDevice(device_id=device_id, is_foreign=True).hosts for device_id in devices_id]
+        hosts = list(itertools.chain(*hosts))
+
         return hosts
 
     @property
@@ -234,10 +262,8 @@ class HTMHDevice(MongoDriver):
         hosts = self.hosts
         foreign = self.foreign_hosts
         if hosts or foreign:
-            hosts = []
-            hosts.append(hosts)
-            hosts.append(foreign)
-            return hosts
+            all_hosts = [*hosts, *foreign]
+            return all_hosts
 
         return None
 
@@ -249,6 +275,13 @@ class HTMHDevice(MongoDriver):
 
         return None
 
+    @property
+    def public_mac(self):
+        collection = self.db['AnatomyAccessDevices']
+        public_mac = collection.find_one({'_id': self.device_id})
+        public_mac = public_mac['publicMac']
+        return public_mac
+
     def maps_ip(self, range_id):
         hosts = self.hosts
         for host in hosts:
@@ -257,8 +290,6 @@ class HTMHDevice(MongoDriver):
             host['virtualIp'] = ip_to_map
 
         self.hosts = hosts
-
-
 
 
 class UserNetworkAnatomy(MongoDriver):
@@ -270,7 +301,7 @@ class UserNetworkAnatomy(MongoDriver):
         collection = self.db['AnatomyHosts']
         query = {'deviceId': self.device_id}
         hosts = []
-        keys_to_filter = ['mac', 'ip', 'virtualIp', 'friendlyName', ]
+        keys_to_filter = ['mac', 'ip', 'virtualIp', 'friendlyName']
         for host in collection.find(query):
             filtered = dict((k, host[k]) for k in keys_to_filter if k in host)
             hosts.append(filtered)
@@ -298,7 +329,6 @@ class User(MongoDriver):
         return user
 
     def is_logged(self):
-        print(self.user)
         query = {"documentId": self.user, "webApp.logged": True}
 
         return True if self.collection.find_one(query) else False
@@ -325,7 +355,8 @@ class User(MongoDriver):
     @property
     def actual_service(self):
         query = {"documentId": self.user}
-        actual_service = self.collection.find_one(filter=query)['actualService']
+        actual_service = self.collection.find_one(filter=query)
+        actual_service = actual_service['actualService']
 
         return actual_service
 
@@ -359,7 +390,9 @@ class Services(MongoDriver):
     def __init__(self, user_id):
         self.user = User(user_id=user_id)
         self.user_id = User.user_str
+
         MongoDriver.__init__(self, db_name='Services')
+        self.collection = self.db['Htmh']
 
     @property
     def user_col(self):
@@ -381,7 +414,7 @@ class Services(MongoDriver):
 
     @property
     def htmh_subscribers(self):
-        service = self.serv_col.find_one({'token': self.user.actual_service})
+        service = self.collection.find_one({'token': self.user.actual_service})
         response = None
         subscribers_list = []
 
@@ -547,7 +580,5 @@ class Services(MongoDriver):
 
 
 if __name__ == '__main__':
-    c = GetConfig(db_name='NetworkStatus')
-    c.collection = 'Endpoints'
-    c.doc = 'links'
-    print(c.get_all_links)
+    user = User(user_id='00212345678')
+    print(user.actual_service)

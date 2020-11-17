@@ -13,7 +13,7 @@ class Watchdog:
         self._watch_links = False
         self._watch_hosts = False
 
-        self.access_hd = AccessHandler()
+        #self.access_handler = AccessHandler()
 
 
     @property
@@ -38,6 +38,7 @@ class Watchdog:
         na = NetworkAnatomy('NetworkStatus')
         na.links = onos_driver.get_links()
         while True:
+            time.sleep(1.2)
             links = onos_driver.get_links()
             down_links, restored_links = na.compare_links(links)
             if down_links:
@@ -52,17 +53,15 @@ class Watchdog:
         print('Starting watchdog for hosts...')
         onos_driver = ONOSDriver()
         na = NetworkAnatomy('NetworkStatus')
-        na.hosts = onos_driver.get_hosts()
+
         while True:
-            hosts = onos_driver.get_hosts()
-            new_hosts = na.new_host(hosts)
-            if new_hosts:
-                for host in new_hosts:
-                    device_id = host.split('-')[1]
-                    device_id = ObjectId('0'*8 + device_id)
-                    AccessHandler().device_normal_functions(device_id=device_id)
-                na.hosts = hosts
-                print('New hosts are: ', new_hosts)
+                time.sleep(0.5)
+                hosts = onos_driver.get_hosts()
+                devices_to_update = na.add_hosts(hosts)
+                if devices_to_update:
+                    print('here', )
+                    for device_to_update in devices_to_update:
+                        AccessHandler().device_normal_functions(device_id=device_to_update)
 
     def run(self):
         print("Watchdog has started")

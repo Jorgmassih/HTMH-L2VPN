@@ -67,7 +67,7 @@ class ONOSDriver:
 
         return response
 
-    def install_arp_flow(self, device_id: str, hosts: dict, ports: list):
+    def install_arp_flow(self, device_id: str, hosts: list, ports: list):
         self.config.collection = 'Endpoints'
         self.config.doc = 'network_config'
 
@@ -92,27 +92,25 @@ class ONOSDriver:
 
         return response
 
-    def install_outgoing_flows(self, device: str, hosts: dict, foreign_hosts: dict, service_token: str):
+    def install_outgoing_flows(self, device: str, hosts: list, foreign_hosts: list, service_token: str):
         self.config.collection = 'Flows'
         self.config.doc = 'outgoing_traffic'
         flow_body = self.config.flow
 
         flow_list = []
 
-        hosts_macs = list(hosts.keys())
-        foreign_macs = list(foreign_hosts.keys())
-
-        for foreign_mac in foreign_macs:
-            for host_mac in hosts_macs:
+        for foreign_host in foreign_hosts:
+            print(foreign_hosts)
+            for host in hosts:
                 flow = copy.deepcopy(flow_body)
 
                 flow['deviceId'] = device
-                flow['treatment']['instructions'][0]['mac'] = foreign_hosts[foreign_mac]['public_mac']
-                flow['treatment']['instructions'][1]['ip'] = hosts[host_mac]['mapped_ip']
+                flow['treatment']['instructions'][0]['mac'] = foreign_host['publicMac']
+                flow['treatment']['instructions'][1]['ip'] = host['virtualIp']
 
-                flow['selector']['criteria'][1]['ip'] = foreign_hosts[foreign_mac]['ip'] + '/32'
-                flow['selector']['criteria'][2]['ip'] = hosts[host_mac]['ip'] + '/32'
-                flow['selector']['criteria'][3]['mac'] = foreign_mac
+                flow['selector']['criteria'][1]['ip'] = foreign_host['ip'] + '/32'
+                flow['selector']['criteria'][2]['ip'] = host['ip'] + '/32'
+                flow['selector']['criteria'][3]['mac'] = foreign_host['mac']
                 flow_list.append(flow)
 
         flow = {"flows": flow_list}
@@ -125,26 +123,24 @@ class ONOSDriver:
 
         return response
 
-    def install_incoming_flows(self, device: str, hosts: dict, service_token: str):
+    def install_incoming_flows(self, device: str, hosts: list, service_token: str):
         self.config.collection = 'Flows'
         self.config.doc = 'incoming_traffic'
         flow_body = self.config.flow
 
         flow_list = []
 
-        macs = list(hosts.keys())
-
-        for mac in macs:
+        for host in hosts:
             flow = copy.deepcopy(flow_body)
 
             flow['deviceId'] = device
 
-            flow['treatment']['instructions'][0]['mac'] = mac
-            flow['treatment']['instructions'][1]['ip'] = hosts[mac]['ip']
+            flow['treatment']['instructions'][0]['mac'] = host['mac']
+            flow['treatment']['instructions'][1]['ip'] = host['ip']
 
-            flow['treatment']['instructions'][2]['port'] = hosts[mac]['port']
+            flow['treatment']['instructions'][2]['port'] = host['port']
 
-            flow['selector']['criteria'][1]['ip'] = hosts[mac]['mapped_ip'] + '/32'
+            flow['selector']['criteria'][1]['ip'] = host['virtualIp'] + '/32'
 
             flow_list.append(flow)
 
