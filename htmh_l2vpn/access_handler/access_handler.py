@@ -36,8 +36,6 @@ class AccessHandler:
     def device_normal_functions(device_id):
         device = HTMHDevice(device_id=device_id)
 
-        print('here with ', device.device_id)
-
         hosts = device.hosts
         if len(hosts) > 1:
             ONOSDriver().install_arp_flow(device_id=device.of_id, hosts=device.hosts, ports=device.active_ports)

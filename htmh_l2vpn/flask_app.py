@@ -1,3 +1,4 @@
+import datetime
 from functools import wraps
 
 from flask import Flask, request, Response
@@ -99,6 +100,15 @@ def is_auth():
         return Response(json.dumps({'message': 'Unauthorized'}), status=403)
 
 
+@app.route('/api/v1/basic/fullname', methods=['GET'])
+@auth_required
+def get_fullname():
+    token = request.cookies.get('_access_token_')
+    user = jwt.decode_token(token)['sub']
+    user = User(user).fullname
+
+    return Response(json.dumps({'fullname': user}), status=200)
+
 @app.route('/api/v1/device/list', methods=['GET'])
 @auth_required
 def device_list():
@@ -158,6 +168,21 @@ def create_a_service():
     return Response(json.dumps(result), status=201)
 
 
+@app.route('/api/v1/services/htmh/start', methods=['GET'])
+@auth_required
+def start_a_service():
+    token = request.cookies.get('_access_token_')
+    username = jwt.decode_token(token)['sub']
+    services = Services(username)
+    device_list = services.htmh_devices['subs_list']
+    service_token = str(User(user_id=username).actual_service)
+
+    AccessHandler().create_l2vpn(device_list, service_token=service_token)
+
+    print('done...')
+
+    return Response(status=200)
+
 @app.route('/api/v1/services/htmh/subscribe', methods=['PUT'])
 @auth_required
 def add_user_to_service():
@@ -183,7 +208,8 @@ def kill_a_service():
     username = jwt.decode_token(token)['sub']
     services = Services(username)
     result = services.kill_one()
-    if (result['message'] != 'success'):
+
+    if result['message'] != 'success':
         return Response(json.dumps(result), status=401)
     return Response(json.dumps(result), status=200)
 
@@ -206,5 +232,6 @@ if __name__ == '__main__':
     watchdog = Watchdog()
     watchdog.watch_links = True
     watchdog.watch_hosts = True
+    watchdog.watch_services = True
     watchdog.run()
     app.run()

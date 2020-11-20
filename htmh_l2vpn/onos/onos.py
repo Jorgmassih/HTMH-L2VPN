@@ -100,7 +100,6 @@ class ONOSDriver:
         flow_list = []
 
         for foreign_host in foreign_hosts:
-            print(foreign_hosts)
             for host in hosts:
                 flow = copy.deepcopy(flow_body)
 
