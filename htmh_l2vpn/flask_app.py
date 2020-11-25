@@ -4,13 +4,11 @@ from functools import wraps
 from flask import Flask, request, Response
 
 from htmh_l2vpn.access_handler.access_handler import AccessHandler
-from htmh_l2vpn.mongodb.mongo_driver import User, UserNetworkAnatomy, Services
+from htmh_l2vpn.mongodb.mongo_driver import User, UserNetworkAnatomy, Services, HTMHService
 from htmh_l2vpn.utils.utils import get_fee
 from htmh_l2vpn.watchdog.watchdog import Watchdog
 from htmh_l2vpn.web_services_stuff.jwt_handler import WebToken
 import json
-
-
 
 app = Flask(__name__)
 
@@ -18,8 +16,6 @@ secret_key = "secret"
 jwt = WebToken(secret_key=secret_key)
 
 allowed_cross_domains = ['http://127.0.0.1:3000']
-
-
 
 
 def auth_required(f):
@@ -64,7 +60,7 @@ def login():
     if db_validation:
         token = jwt.create_token(username)
         token_str = token['token'].decode()
-        #record_log(session_id=token_str, log_type='Login')
+        # record_log(session_id=token_str, log_type='Login')
 
         if token is None:
             return Response({'message': 'Error while creating token'}, 500)
@@ -109,6 +105,7 @@ def get_fullname():
 
     return Response(json.dumps({'fullname': user}), status=200)
 
+
 @app.route('/api/v1/device/list', methods=['GET'])
 @auth_required
 def device_list():
@@ -120,7 +117,7 @@ def device_list():
     others_devices = [{'name': subscriber['name'],
                        'equipment': subscriber['equipment'],
                        'devices': UserNetworkAnatomy(user_id=subscriber['userId']).get_devices_list()}
-                      for subscriber in subscribers_list]
+                      for subscriber in subscribers_list if subscriber['active']]
 
     all_devices_list = {'userDevices': d_list, 'othersDevices': others_devices}
 
@@ -175,13 +172,35 @@ def start_a_service():
     username = jwt.decode_token(token)['sub']
     services = Services(username)
     device_list = services.htmh_devices['subs_list']
-    service_token = str(User(user_id=username).actual_service)
+    service_token = User(user_id=username).actual_service
+    HTMHService().set_running_service(token=service_token)
 
-    AccessHandler().create_l2vpn(device_list, service_token=service_token)
+    AccessHandler().create_l2vpn(device_list, service_token=str(service_token))
 
     print('done...')
 
     return Response(status=200)
+
+
+@app.route('/api/v1/services/htmh/delete', methods=["DELETE"])
+@auth_required
+def kill_a_service():
+    token = request.cookies.get('_access_token_')
+    username = jwt.decode_token(token)['sub']
+    services = Services(username)
+    result = services.kill_one()
+    service_token = str(User(user_id=username).actual_service)
+    if result.get('subscriber_info'):
+        AccessHandler().delete_l2vpn(devices=[result.get('subscriber_info')['device']],
+                                     service_token=result.get('subscriber_info')['service_token'])
+    else:
+        AccessHandler().delete_l2vpn(devices=services.htmh_devices, service_token=service_token)
+    print('deleted')
+
+    if result['message'] != 'success':
+        return Response(json.dumps({'message': result['message']}), status=401)
+    return Response(json.dumps({'message': result['message']}), status=200)
+
 
 @app.route('/api/v1/services/htmh/subscribe', methods=['PUT'])
 @auth_required
@@ -199,19 +218,6 @@ def add_user_to_service():
         return Response(json.dumps({'message': result}), status=401)
 
     return Response(json.dumps(result), status=201)
-
-
-@app.route('/api/v1/services/htmh/kill', methods=["DELETE"])
-@auth_required
-def kill_a_service():
-    token = request.cookies.get('_access_token_')
-    username = jwt.decode_token(token)['sub']
-    services = Services(username)
-    result = services.kill_one()
-
-    if result['message'] != 'success':
-        return Response(json.dumps(result), status=401)
-    return Response(json.dumps(result), status=200)
 
 
 @app.route('/api/v1/services/htmh/get')

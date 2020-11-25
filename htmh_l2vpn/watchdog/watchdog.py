@@ -42,7 +42,6 @@ class Watchdog:
                 hosts = onos_driver.get_hosts()
                 devices_to_update = na.add_hosts(hosts)
                 if devices_to_update:
-                    print('here', )
                     for device_to_update in devices_to_update:
                         AccessHandler().device_normal_functions(device_id=device_to_update)
 
@@ -57,6 +56,9 @@ class Watchdog:
                 print('Pending Services: ', pending)
 
             if expired:
+                for service_token in expired:
+                    devices_list = HTMHService().get_htmh_devices(service_token)
+                    AccessHandler().delete_l2vpn(devices=devices_list, service_token=service_token)
                 print('Expired services: ', expired)
 
 

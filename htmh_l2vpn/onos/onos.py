@@ -42,7 +42,7 @@ class ONOSDriver:
                                     headers=self.headers,
                                     auth=self.auth).json()['ports']
 
-        mac = '00:ff:00:ff:00:ff'
+        mac = ''
 
         for port in device_ports:
             if port['port'] == '1':
@@ -117,7 +117,8 @@ class ONOSDriver:
         self.config.collection = 'Endpoints'
         self.config.doc = 'flows'
 
-        response = requests.post(self.config.post_flow.format(self.url, 'l2vpn.outgoing.map.' + service_token),
+        response = requests.post(self.config.post_flow.format(self.url, 'l2vpn.outgoing.map.{}.{}'.format(service_token,
+                                                                                                          device)),
                                  headers=self.headers, auth=self.auth, json=flow)
 
         return response
@@ -147,7 +148,8 @@ class ONOSDriver:
 
         self.config.collection = 'Endpoints'
         self.config.doc = 'flows'
-        response = requests.post(self.config.post_flow.format(self.url, 'l2vpn.incoming.map.' + service_token),
+        response = requests.post(self.config.post_flow.format(self.url, 'l2vpn.incoming.map.{}.{}'.format(service_token,
+                                                                                                          device)),
                                  headers=self.headers, auth=self.auth, json=flows)
 
         return response
@@ -183,10 +185,10 @@ class ONOSDriver:
             flow_list.append(flow)
 
         flow = {"flows": flow_list}
-
         self.config.collection = 'Endpoints'
         self.config.doc = 'flows'
-        response = requests.post(self.config.post_flow.format(self.url, 'l2vpn.core.path.' + service_token),
+        response = requests.post(self.config.post_flow.format(self.url, 'l2vpn.core.path.{}.{}'.format(service_token,
+                                                                                                       dst)),
                                  headers=self.headers, auth=self.auth, json=flow)
 
         return response
@@ -195,7 +197,7 @@ class ONOSDriver:
         self.config.collection = 'Endpoints'
         self.config.doc = 'flows'
 
-        response = requests.delete(self.config.delete_flows.format(self.url, app_id), headers=self.headers,
+        response = requests.delete(self.config.delete_flow.format(self.url, app_id), headers=self.headers,
                                    auth=self.auth)
 
         return response

@@ -196,9 +196,10 @@ class HTMHDevice(MongoDriver):
             self.device_id = device_id
 
         def devices_in_same_service(self):
-            query = {'subscribers': {'$elemMatch': {'equipment': self.device_id}}}
+            query = {'isUsable': True, 'subscribers': {'$elemMatch': {'equipment': self.device_id}}}
             devices = self.collection.find_one(query)['subscribers']
-            devices = [device['equipment'] for device in devices if device['equipment'] != self.device_id]
+            devices = [device['equipment'] for device in devices if device['equipment'] != self.device_id
+                       and device['active']]
             return devices
 
     def __init__(self, device_id, is_foreign: bool = False):
@@ -288,6 +289,11 @@ class HTMHDevice(MongoDriver):
 
         self.hosts = hosts
 
+    def reset_virtual_ips(self):
+        collection = self.db['AnatomyHosts']
+        query = {'deviceId': self.device_id}
+        collection.update_many(query, {'$set': {'virtualIp': ''}})
+
 
 class UserNetworkAnatomy(MongoDriver):
     def __init__(self, user_id: str):
@@ -317,10 +323,13 @@ class UserNetworkAnatomy(MongoDriver):
 
 
 class User(MongoDriver):
-    def __init__(self, user_id: str):
+    def __init__(self, user_id):
         MongoDriver.__init__(self, db_name='UserInfo')
         self.collection = self.db['User']
-        self.user = ObjectId('0'*13 + user_id)
+        if type(user_id) == str:
+            self.user = ObjectId('0'*13 + user_id)
+        else:
+            self.user = user_id
         self.collection.create_index([('token', 1), ('actualService', 1), ('equipmentId', 1)])
 
     @property
@@ -361,8 +370,10 @@ class User(MongoDriver):
         return actual_service
 
     @actual_service.setter
-    def actual_service(self, service_token):
-        self.collection.update_one({'documentId': self.user}, {'$set': {'actualService': service_token}})
+    def actual_service(self, param):
+        query = {'documentId': self.user}
+        self.collection.update_one(query, {'$set': {'actualService': param}})
+
 
     @property
     def first_name(self):
@@ -389,21 +400,10 @@ class User(MongoDriver):
 class Services(MongoDriver):
     def __init__(self, user_id):
         self.user = User(user_id=user_id)
-        self.user_id = User.user_str
 
         MongoDriver.__init__(self, db_name='Services')
         self.collection = self.db['Htmh']
         self.collection.create_index([('token', 1)])
-
-    @property
-    def user_col(self):
-        self.db_name = 'UserInfo'
-        return self.db['User']
-
-    @property
-    def serv_col(self):
-        self.db_name = 'Services'
-        return self.db['Htmh']
 
     @property
     def htmh_subscribers(self):
@@ -419,7 +419,8 @@ class Services(MongoDriver):
 
         subscribers_list = [{'userId': str(subscriber['userId'])[-11:],
                              'name': subscriber['name'],
-                             'equipment': str(subscriber['equipment'])[-16:]}
+                             'equipment': str(subscriber['equipment'])[-16:],
+                             'active': subscriber['active']}
                             for subscriber in service['subscribers'] if subscriber['userId'] != user_id]
 
         return {'response': response, 'subs_list': subscribers_list}
@@ -433,7 +434,7 @@ class Services(MongoDriver):
             response = 'This user is not subscribed to any service'
             return {'response': response, 'subs_list': []}
 
-        devices_list = [subscriber['equipment'] for subscriber in service['subscribers']]
+        devices_list = [subscriber['equipment'] for subscriber in service['subscribers'] if subscriber['active']]
         return {'response': response, 'subs_list': devices_list}
 
     def create_one(self, content):
@@ -457,7 +458,7 @@ class Services(MongoDriver):
             response['message'] = 'Services cannot exist in the past'
             return response
 
-        if (content['endDatetime'] - content['startDatetime']).total_seconds()/60 < 30:
+        if (content['endDatetime'] - content['startDatetime']).total_seconds()/60 < 5:
             response['message'] = 'Service minimum time is 30 minutes'
             return response
 
@@ -468,13 +469,13 @@ class Services(MongoDriver):
             self.user.actual_service = service_token
             content['subscribers'].append({'name': self.user.fullname,
                                            'equipment': self.user.equipment_id,
-                                           'userId': self.user.user})
+                                           'userId': self.user.user,
+                                           'active': True})
         else:
             response['message'] = 'The User is already on another service'
             return response
 
-        collec = self.serv_col
-        inserting = collec.insert_one(content).inserted_id
+        inserting = self.collection.insert_one(content).inserted_id
         response['message'] = 'success'
         response['serviceToken'] = str(content['token'])
         return response
@@ -482,10 +483,9 @@ class Services(MongoDriver):
     def add_user_to(self, content):
         response = None
 
-        collec = self.serv_col
         token = ObjectId(content['serviceToken'])
         secret_key = content['secretKey']
-        service = collec.find_one({'token': token})
+        service = self.collection.find_one({'token': token})
 
         if not service:
             response = 'Invalid Token'
@@ -509,56 +509,69 @@ class Services(MongoDriver):
 
         service['subscribers'].append({'name': self.user.fullname,
                                        'equipment': self.user.equipment_id,
-                                       'userId': self.user.user})
+                                       'userId': self.user.user,
+                                       'active': True})
 
         new_values = {"$set": service}
 
         self.user.actual_service = token
 
-        collec.update_one({'token': token}, new_values)
+        self.collection.update_one({'token': token}, new_values)
 
         return response
 
     def kill_one(self):
-        # user_db = Mongo.UserInfo
-        user_col = self.user_col
-        serv_col = self.serv_col
+        service_token = self.user.actual_service
         response = {'message': None}
-        # token = request.args.get('token')
-        if self.service_token is None:
+
+        if service_token is None:
             response['message'] = 'Service not found'
             return response
-        service = serv_col.find_one({'token': ObjectId(self.service_token)})
+        service = self.collection.find_one({'token': service_token})
 
         if service is None or not service['isUsable']:
             response['message'] = 'Service not existing'
             return response
-        # print(service['usersId'])
 
-        if service['usersId'].index(ObjectId(self.user_id)) != 0:
-            service['usersId'].remove(ObjectId(self.user_id))
-            user_col.update_one({'documentId': ObjectId(self.user_id)}, {'$set': {'actualService': None}})
-            serv_col.update_one({'token': ObjectId(self.service_token)}, {'$set': {'usersId': service['usersId']}})
+        user_id = self.user.user
+        if service['subscribers'][0]['userId'] != user_id:
+            user_device = self.user.equipment_id
+            user_fullname = self.user.fullname
+            user_active_status = True
+
+            user_object = {'name': user_fullname, 'equipment': user_device, 'userId': user_id,
+                           'active': user_active_status}
+
+            idx = service['subscribers'].index(user_object)
+            self.collection.update_one({'token': service_token},
+                                       {'$set': {'subscribers.{}.active'.format(idx): False},
+                                        '$inc': {'subscribersNum': -1}})
+
+            response['subscriber_info'] = {'device': self.user.equipment_id, 'service_token': service_token}
+            self.user.actual_service = None
+
             response['message'] = 'success'
             return response
 
-        for userId in service['usersId']:
-            # print(user_col.find_one({'documentId': userId}))
-            user_col.update_one({'documentId': userId}, {'$set': {'actualService': None}})
-        serv_col.update_one({'token': ObjectId(self.service_token)}, {'$set': {'isUsable': False}})
+        self.collection.update_one({'token': service_token}, {'$set':
+                                                                     {"permitRun": False,
+                                                                      'isRunning': False,
+                                                                      'isUsable': False}})
+        for subscriber in service['subscribers']:
+            User(subscriber['userId']).actual_service = None
+
         response['message'] = 'success'
         return response
 
     def show_one(self):
         response = {'message': None, 'content': None}
 
-        serv_col = self.serv_col
         user_actual_service = self.user.actual_service
         if user_actual_service is None:
             response['message'] = 'Service not found'
             return response
 
-        service_info = serv_col.find_one({'token': user_actual_service})
+        service_info = self.collection.find_one({'token': user_actual_service})
         if service_info is None or not service_info['isUsable']:
             response['message'] = 'Service not existing'
             return response
@@ -568,7 +581,8 @@ class Services(MongoDriver):
         result_service['serviceToken'] = str(service_info['token'])
 
         result_service['subscribersList'] = [{'name': subscriber['name'],
-                                              'equipment': str(subscriber['equipment'])[-16:]}
+                                              'equipment': str(subscriber['equipment'])[-16:],
+                                              'active': subscriber['active']}
                                              for subscriber in service_info['subscribers']]
 
         result_service['subsNum'] = str(len(service_info['subscribers'])) + '/' + str(service_info['subscribersNum'])
@@ -579,6 +593,7 @@ class Services(MongoDriver):
         result_service['isOwner'] = is_owner
         result_service['secretKey'] = service_info['secretKey'] if is_owner else ''
         result_service['permitRun'] = service_info['permitRun'] if is_owner else None
+        result_service['isRunning'] = service_info['isRunning'] if is_owner else None
 
         response['message'] = 'success'
         response['content'] = result_service
@@ -598,7 +613,8 @@ class HTMHService(MongoDriver):
         ready_to_activate = []
         for service in self.collection.find(query):
             now_time = datetime.datetime.now()
-            if len(service['subscribers']) == service['subscribersNum'] and (
+            active_subscribers = [subscriber for subscriber in service['subscribers'] if subscriber['active']]
+            if len(active_subscribers) == service['subscribersNum'] and (
                     service['startDatetime'] <= now_time < service['endDatetime']):
                 token = service['token']
                 query = {'token': token}
@@ -626,6 +642,8 @@ class HTMHService(MongoDriver):
                     }
                 )
                 expired.append(token)
+                for subscriber in service['subscribers']:
+                    User(subscriber['userId']).actual_service = None
 
         return expired
 
@@ -647,6 +665,15 @@ class HTMHService(MongoDriver):
             }
         )
 
+    def set_running_service(self, token: ObjectId):
+        query = {'token': token}
+        self.collection.update(query, {'$set': {'isRunning': True}})
+
+    def get_htmh_devices(self, token: ObjectId):
+        query = {'token': token}
+        subscribers = self.collection.find_one(query)['subscribers']
+        devices = [subscriber['equipment'] for subscriber in subscribers]
+        return devices
 
 if __name__ == '__main__':
     user = User(user_id='00212345678')

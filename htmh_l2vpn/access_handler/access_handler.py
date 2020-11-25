@@ -12,14 +12,8 @@ class AccessHandler:
     def __init__(self):
         self.na = NetworkAnatomy()
         self.access_devices = self.na.access_devices_ids
-        self.switches_id = {'of:0000c27e34dffd4f', 'of:0000068f79daf149',
-                            'of:00006a2f1bc24a4c', 'of:0000823c3afb9d4c',
-                            'of:000096510082cc4f'}
 
         self.onos_driver = ONOSDriver()
-
-        self.access_sw = dict([(sw_id, AccessSw(id=sw_id, public_mac=self.onos_driver.get_sw_public_mac(sw_id)))
-                          for sw_id in self.switches_id])
 
     def set_normal_functions(self):
         # Install internal fwd flows and arp
@@ -89,17 +83,25 @@ class AccessHandler:
                 self.onos_driver.install_arp_flow(device_id=device.of_id, hosts=device.all_hosts,
                                                   ports=device.active_ports)
 
-    def delete_l2vpn(self, devices, service_token):
-        self.onos_driver.delete_flow_app('l2vpn.core.path.' + service_token)
-        self.onos_driver.delete_flow_app('l2vpn.outgoing.map.' + service_token)
-        self.onos_driver.delete_flow_app('l2vpn.incoming.map.' + service_token)
+    def delete_l2vpn(self, devices: list, service_token):
+        service_token = str(service_token)
 
-        for device in devices:
-            self.access_sw[device].wipe_foreign_hosts()
-            if len(device) > 1:
-                self.onos_driver.install_arp_flow(device_id=self.access_sw[device].device_id,
-                                                  hosts=self.access_sw[device].hosts,
-                                                  ports=self.access_sw[device].active_ports)
+        print(devices, type(devices))
+
+        for device_id in devices:
+            device = HTMHDevice(device_id=device_id)
+            print('l2vpn.core.path.{}.{}'.format(service_token, device.of_id))
+            self.onos_driver.delete_flow_app('l2vpn.core.path.{}.{}'.format(service_token, device.of_id))
+            print('l2vpn.outgoing.map.{}.{}'.format(service_token, device.of_id))
+            self.onos_driver.delete_flow_app('l2vpn.outgoing.map.{}.{}'.format(service_token, device.of_id))
+            print('l2vpn.incoming.map.{}.{}'.format(service_token, device.of_id))
+            self.onos_driver.delete_flow_app('l2vpn.incoming.map.{}.{}'.format(service_token, device.of_id))
+            device.reset_virtual_ips()
+            hosts = device.hosts
+            if len(hosts) > 1:
+                self.onos_driver.install_arp_flow(device_id=device.of_id,
+                                                  hosts=hosts,
+                                                  ports=device.active_ports)
 
     def remote_default_gw(self, devices, service_token):
         pass
