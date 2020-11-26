@@ -86,15 +86,12 @@ class AccessHandler:
     def delete_l2vpn(self, devices: list, service_token):
         service_token = str(service_token)
 
-        print(devices, type(devices))
 
         for device_id in devices:
+            print(device_id, type(device_id))
             device = HTMHDevice(device_id=device_id)
-            print('l2vpn.core.path.{}.{}'.format(service_token, device.of_id))
             self.onos_driver.delete_flow_app('l2vpn.core.path.{}.{}'.format(service_token, device.of_id))
-            print('l2vpn.outgoing.map.{}.{}'.format(service_token, device.of_id))
             self.onos_driver.delete_flow_app('l2vpn.outgoing.map.{}.{}'.format(service_token, device.of_id))
-            print('l2vpn.incoming.map.{}.{}'.format(service_token, device.of_id))
             self.onos_driver.delete_flow_app('l2vpn.incoming.map.{}.{}'.format(service_token, device.of_id))
             device.reset_virtual_ips()
             hosts = device.hosts

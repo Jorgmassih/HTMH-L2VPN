@@ -426,6 +426,11 @@ class Services(MongoDriver):
         return {'response': response, 'subs_list': subscribers_list}
 
     @property
+    def is_running(self):
+        service = self.collection.find_one({'token': self.user.actual_service})
+        return service['isRunning']
+
+    @property
     def htmh_devices(self):
         service = self.collection.find_one({'token': self.user.actual_service})
         response = None
@@ -547,9 +552,8 @@ class Services(MongoDriver):
                                        {'$set': {'subscribers.{}.active'.format(idx): False},
                                         '$inc': {'subscribersNum': -1}})
 
-            response['subscriber_info'] = {'device': self.user.equipment_id, 'service_token': service_token}
             self.user.actual_service = None
-
+            response['one_subscriber'] = True
             response['message'] = 'success'
             return response
 
@@ -674,6 +678,7 @@ class HTMHService(MongoDriver):
         subscribers = self.collection.find_one(query)['subscribers']
         devices = [subscriber['equipment'] for subscriber in subscribers]
         return devices
+
 
 if __name__ == '__main__':
     user = User(user_id='00212345678')

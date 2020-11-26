@@ -187,19 +187,28 @@ def start_a_service():
 def kill_a_service():
     token = request.cookies.get('_access_token_')
     username = jwt.decode_token(token)['sub']
+
     services = Services(username)
-    result = services.kill_one()
-    service_token = str(User(user_id=username).actual_service)
-    if result.get('subscriber_info'):
-        AccessHandler().delete_l2vpn(devices=[result.get('subscriber_info')['device']],
-                                     service_token=result.get('subscriber_info')['service_token'])
-    else:
-        AccessHandler().delete_l2vpn(devices=services.htmh_devices, service_token=service_token)
+    devices = services.htmh_devices['subs_list']
+
+    user = User(user_id=username)
+    service_token = str(user.actual_service)
+    service_running = services.is_running
+
+    delete_service = services.kill_one()
+
+    if service_running:
+        if delete_service.get('one_subscriber'):
+            AccessHandler().delete_l2vpn(devices=[user.equipment_id],
+                                         service_token=service_token)
+        else:
+            AccessHandler().delete_l2vpn(devices=devices, service_token=service_token)
+
     print('deleted')
 
-    if result['message'] != 'success':
-        return Response(json.dumps({'message': result['message']}), status=401)
-    return Response(json.dumps({'message': result['message']}), status=200)
+    if delete_service['message'] != 'success':
+        return Response(json.dumps({'message': delete_service['message']}), status=401)
+    return Response(json.dumps({'message': delete_service['message']}), status=200)
 
 
 @app.route('/api/v1/services/htmh/subscribe', methods=['PUT'])
